@@ -1,19 +1,21 @@
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 
 interface LogoProps {
   className?: string;
   size?: 'sm' | 'md' | 'lg';
   showTagline?: boolean;
+  href?: string;
 }
 
-export function Logo({ className, size = 'md', showTagline = false }: LogoProps) {
+export function Logo({ className, size = 'md', showTagline = false, href = '/' }: LogoProps) {
   const sizes = {
     sm: { icon: 'w-6 h-6', text: 'text-lg', tagline: 'text-[8px]' },
     md: { icon: 'w-8 h-8', text: 'text-2xl', tagline: 'text-[9px]' },
     lg: { icon: 'w-12 h-12', text: 'text-4xl', tagline: 'text-xs' },
   };
 
-  return (
+  const content = (
     <div className={cn('flex flex-col', className)}>
       <div className="flex items-center gap-2">
         {/* Lynx Eye Icon */}
@@ -53,4 +55,10 @@ export function Logo({ className, size = 'md', showTagline = false }: LogoProps)
       )}
     </div>
   );
+
+  if (href) {
+    return <Link href={href}>{content}</Link>;
+  }
+
+  return content;
 }
