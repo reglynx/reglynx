@@ -31,7 +31,7 @@ function emailFooter(): string {
     'notification preferences in your RegLynx dashboard settings.',
     '',
     'RegLynx — Ramesses Management & Contracting LLC',
-    '1401 Spruce Street, Philadelphia, PA 19102',
+    '1700 Market St. Suite 1005, Philadelphia, PA 19103',
     '',
     '\u00A9 2026 RegLynx. All rights reserved.',
   ].join('\n');
