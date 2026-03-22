@@ -185,7 +185,7 @@ export default function PrivacyPage() {
             <p className="mt-1">
               Ramesses Management &amp; Contracting LLC
               <br />
-              1401 Spruce Street, Philadelphia, PA 19102
+              1700 Market St., Suite 1005, Philadelphia, PA 19103
             </p>
           </section>
         </div>
