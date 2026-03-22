@@ -57,7 +57,7 @@ export const SUBSCRIPTION_PLANS = {
   starter: {
     name: 'Starter',
     price: 147,
-    priceId: process.env.STRIPE_PRICE_ID_STARTER || '',
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_STARTER || process.env.STRIPE_PRICE_ID_STARTER || '',
     features: [
       'Up to 5 properties',
       '10 document drafts/month',
@@ -74,7 +74,7 @@ export const SUBSCRIPTION_PLANS = {
   professional: {
     name: 'Professional',
     price: 297,
-    priceId: process.env.STRIPE_PRICE_ID_PROFESSIONAL || '',
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_PROFESSIONAL || process.env.STRIPE_PRICE_ID_PROFESSIONAL || '',
     features: [
       'Up to 25 properties',
       'Unlimited document drafts',
@@ -92,7 +92,7 @@ export const SUBSCRIPTION_PLANS = {
   enterprise: {
     name: 'Enterprise',
     price: 597,
-    priceId: process.env.STRIPE_PRICE_ID_ENTERPRISE || '',
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_ENTERPRISE || process.env.STRIPE_PRICE_ID_ENTERPRISE || '',
     features: [
       'Unlimited properties',
       'Unlimited document drafts',
