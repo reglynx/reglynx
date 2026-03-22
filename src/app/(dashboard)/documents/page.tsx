@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Plus, FileText } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { DocumentCard } from '@/components/dashboard/DocumentCard';
 import type { Organization, Document } from '@/lib/types';
 
