@@ -25,7 +25,7 @@ export default async function DashboardLayout({
     .from('organizations')
     .select('*')
     .eq('owner_id', user.id)
-    .single<Organization>();
+    .maybeSingle<Organization>();
 
   if (!org) {
     redirect('/onboarding');

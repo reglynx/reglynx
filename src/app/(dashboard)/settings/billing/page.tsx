@@ -49,7 +49,7 @@ export default function BillingPage() {
         .from('organizations')
         .select('*')
         .eq('owner_id', user.id)
-        .single<Organization>();
+        .maybeSingle<Organization>();
 
       if (orgError || !data) {
         setError('Organization not found');

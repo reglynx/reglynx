@@ -23,7 +23,7 @@ export default async function DocumentPage({ params }: DocumentPageProps) {
     .from('organizations')
     .select('*')
     .eq('owner_id', user.id)
-    .single<Organization>();
+    .maybeSingle<Organization>();
 
   if (!org) redirect('/onboarding');
 

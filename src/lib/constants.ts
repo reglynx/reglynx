@@ -108,7 +108,7 @@ export const SUBSCRIPTION_PLANS = {
       jurisdictions: Infinity,
     },
   },
-} as const;
+};
 
 export type SubscriptionPlan = keyof typeof SUBSCRIPTION_PLANS;
 

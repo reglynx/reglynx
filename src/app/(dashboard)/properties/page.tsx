@@ -15,11 +15,15 @@ export default async function PropertiesPage() {
 
   if (!user) redirect('/login');
 
-  const { data: org } = await supabase
+  const { data: org, error: orgError } = await supabase
     .from('organizations')
     .select('*')
     .eq('owner_id', user.id)
-    .single<Organization>();
+    .maybeSingle<Organization>();
+
+  if (orgError) {
+    console.error('Org fetch error:', orgError);
+  }
 
   if (!org) redirect('/onboarding');
 

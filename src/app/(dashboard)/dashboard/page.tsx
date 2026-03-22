@@ -71,7 +71,7 @@ export default async function DashboardPage() {
     .from('organizations')
     .select('*')
     .eq('owner_id', user.id)
-    .single<Organization>();
+    .maybeSingle<Organization>();
 
   if (!org) redirect('/onboarding');
 
