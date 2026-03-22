@@ -299,7 +299,7 @@ export default function LandingPage() {
                 RegLynx — A product of Ramesses Management &amp; Contracting LLC
               </p>
               <p className="text-sm text-slate-500 mt-2">
-                1401 Spruce Street, Philadelphia, PA 19102
+                1700 Market St., Suite 1005, Philadelphia, PA 19103
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-8">
