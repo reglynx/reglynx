@@ -9,14 +9,22 @@
  * API endpoint: https://data.phila.gov/resource/6vkh-6s3i.json
  * Dataset page: https://www.opendataphilly.org/datasets/l-i-violations
  *
+ * Query priority:
+ *   1. OPA account number  — most reliable; exact parcel match
+ *   2. Normalized address  — canonical form from geocoder; tight LIKE match
+ *   3. Raw address prefix  — lowest confidence; only if no better option
+ *
  * TODO (production): Request a Socrata app token from https://data.phila.gov
  *   and set PHILLY_OPEN_DATA_APP_TOKEN env var for 1000 req/hr vs 1000 req/day.
- *
- * TODO (multi-city expansion): Abstract as a ViolationsAdapter<City> interface
- *   so Baltimore (via Maryland Open Data), NYC (via NYC Open Data), etc. can plug in.
  */
 
-import type { AdapterResult, SourceRecord } from '../types';
+import type {
+  AdapterResult,
+  AdapterQueryInput,
+  AdapterMatchMethod,
+  AdapterMatchState,
+  SourceRecord,
+} from '../types';
 
 const DATASET_URL = 'https://data.phila.gov/resource/6vkh-6s3i.json';
 const SOURCE_PAGE = 'https://www.opendataphilly.org/datasets/l-i-violations';
@@ -29,7 +37,7 @@ export interface LniViolationRecord {
   casenumber: string;
   casetype?: string;
   casepriority?: string;
-  casestatus?: string;       // 'OPEN' | 'CLOSED' | 'IN VIOLATION' | varies
+  casestatus?: string;
   violationdate?: string;
   violationresolutiondate?: string;
   address?: string;
@@ -48,55 +56,88 @@ function buildHeaders(): HeadersInit {
 }
 
 /**
- * Normalise a raw address string into a form safe for SODA LIKE queries.
- * Returns the street number + up to three words of the street name.
- * Example: "1234 N. Broad St, Philadelphia, PA" → "1234 N BROAD ST"
+ * Sanitize an address string for a SODA LIKE query.
+ * Returns the first 4 tokens (house number + up to 3 street words), uppercased.
+ * Example: "1234 N. Broad St, Philadelphia" → "1234 N BROAD ST"
  */
-function normalizeAddressForQuery(raw: string): string {
-  // Strip punctuation (commas, periods, hashes), uppercase, collapse spaces
-  const cleaned = raw
+function sanitizeAddressPrefix(raw: string): string {
+  return raw
     .toUpperCase()
     .replace(/[.,#]/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim();
-
-  // Take the first 4 tokens (number + up to 3 street words) for the LIKE match.
-  // This is conservative: "1234 N BROAD" matches better than "1234 N BROAD ST PHILADELPHIA PA".
-  const tokens = cleaned.split(' ').slice(0, 4);
-  return tokens.join(' ');
+    .trim()
+    .split(' ')
+    .slice(0, 4)
+    .join(' ');
 }
 
 /**
  * Fetch L&I violations for a Philadelphia property.
- * Queries by OPA account number when available; falls back to address substring match.
+ *
+ * Query priority:
+ *   1. OPA account number (exact match — most reliable)
+ *   2. Normalized canonical address (tight LIKE prefix)
+ *   3. Raw address fallback (lowest confidence — logged as such)
  */
 export async function fetchLniViolations(
-  addressRaw: string,
-  opaAccountNumber?: string,
+  input: AdapterQueryInput,
 ): Promise<AdapterResult> {
+  let whereClause: string;
+  let matchMethod: AdapterMatchMethod;
+  let queryInput: string;
+
+  if (input.opaAccountNumber) {
+    whereClause = `opa_account_num='${input.opaAccountNumber}'`;
+    matchMethod = 'opa_account';
+    queryInput = input.opaAccountNumber;
+  } else if (input.normalizedAddress) {
+    const prefix = sanitizeAddressPrefix(input.normalizedAddress);
+    whereClause = `upper(address) like '${prefix}%'`;
+    matchMethod = 'normalized_address';
+    queryInput = prefix;
+  } else {
+    const prefix = sanitizeAddressPrefix(input.addressRaw);
+    whereClause = `upper(address) like '${prefix}%'`;
+    matchMethod = 'address_fallback';
+    queryInput = prefix;
+  }
+
+  const sourceEndpoint = `${DATASET_URL}?$where=${encodeURIComponent(whereClause)}&$limit=50&$order=violationdate DESC`;
+
+  console.log(
+    `[lni-violations] query method=${matchMethod} input="${queryInput}" endpoint=${DATASET_URL}`,
+  );
+
   try {
-    let query: string;
-
-    if (opaAccountNumber) {
-      // Prefer OPA account number — most reliable match
-      query = `opa_account_num='${opaAccountNumber}'`;
-    } else {
-      // Fall back to address prefix match (normalised to uppercase, punctuation stripped)
-      const prefix = normalizeAddressForQuery(addressRaw);
-      query = `upper(address) like '${prefix}%'`;
-    }
-
-    const url = `${DATASET_URL}?$where=${encodeURIComponent(query)}&$limit=50&$order=violationdate DESC`;
-    const res = await fetch(url, {
+    const res = await fetch(sourceEndpoint, {
       headers: buildHeaders(),
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!res.ok) {
-      throw new Error(`L&I API returned ${res.status}: ${res.statusText}`);
+      console.error(`[lni-violations] API error ${res.status} ${res.statusText} (method=${matchMethod})`);
+      return {
+        adapterName: 'lni_violations',
+        success: false,
+        records: [],
+        error: `L&I API returned ${res.status}: ${res.statusText}`,
+        matchMethod,
+        matchState: 'query_failed',
+        queryInput,
+        sourceEndpoint,
+        recordCount: 0,
+      };
     }
 
     const records: LniViolationRecord[] = await res.json();
+    const recordCount = records.length;
+
+    console.log(
+      `[lni-violations] method=${matchMethod} records=${recordCount}`,
+    );
+
+    const matchState: AdapterMatchState =
+      recordCount > 0 ? 'verified_match' : 'no_match_found';
 
     const sourceRecords: SourceRecord[] = records.map((r) => ({
       sourceType: 'violation',
@@ -111,14 +152,25 @@ export async function fetchLniViolations(
       adapterName: 'lni_violations',
       success: true,
       records: sourceRecords,
+      matchMethod,
+      matchState,
+      queryInput,
+      sourceEndpoint,
+      recordCount,
     };
   } catch (error) {
-    console.error('[lni-violations] fetch error:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[lni-violations] fetch error (method=${matchMethod}):`, message);
     return {
       adapterName: 'lni_violations',
       success: false,
       records: [],
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
+      matchMethod,
+      matchState: 'query_failed',
+      queryInput,
+      sourceEndpoint,
+      recordCount: 0,
     };
   }
 }
@@ -128,22 +180,21 @@ export async function fetchLniViolations(
  *
  * Known values from the Philly dataset:
  *   'OPEN'         — explicitly open
- *   'IN VIOLATION' — synonymous with open (used by some case types)
+ *   'IN VIOLATION' — synonymous with open
+ *   'VIOLATION'    — shorthand; treat as open
  *   'CLOSED'       — resolved
- *   'VIOLATION'    — shorthand seen in some records; treat as open
  *
- * Anything not clearly 'CLOSED' / 'RESOLVED' / 'COMPLIANT' is treated as open
- * to avoid false negatives.
+ * Anything not in the closed-terms list is treated as open to avoid false negatives.
  */
 function isOpenStatus(rawStatus: string | undefined): boolean {
   const s = (rawStatus ?? '').toUpperCase().trim();
-  if (!s) return false; // unknown — do not count as open
+  if (!s) return false;
   const closedTerms = ['CLOSED', 'RESOLVED', 'COMPLIANT', 'CANCELLED', 'WITHDRAWN'];
   return !closedTerms.some((term) => s === term || s.startsWith(term));
 }
 
 /**
- * Classify violations as open or closed and extract the most recent open case details.
+ * Classify violations as open or closed and extract the most recent open case.
  */
 export function classifyViolations(records: SourceRecord[]): {
   openCount: number;

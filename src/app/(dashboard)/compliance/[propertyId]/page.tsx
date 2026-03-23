@@ -1,5 +1,6 @@
 import { redirect, notFound } from 'next/navigation';
 import Link from 'next/link';
+import { isJurisdictionSupported, UNSUPPORTED_JURISDICTION_MESSAGE } from '@/lib/providers/jurisdiction-config';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -358,6 +359,9 @@ export default async function ComplianceDashboardPage({
       })
     : null;
 
+  // ── Jurisdiction coverage ──────────────────────────────────────────────────
+  const jurisdictionSupported = isJurisdictionSupported(property.city, property.state);
+
   // ── Pilot readiness ───────────────────────────────────────────────────────
   const mockCount = items.filter((i) => i.provenance === 'mock_demo_only').length;
   const verifiedCount = items.filter((i) => i.provenance === 'verified_from_source').length;
@@ -466,6 +470,14 @@ export default async function ComplianceDashboardPage({
         <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           <ShieldCheck className="size-4 shrink-0" />
           Property added. Compliance evaluation is running in the background — refresh in a moment to see results.
+        </div>
+      )}
+
+      {/* Unsupported jurisdiction notice */}
+      {!jurisdictionSupported && (
+        <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <MapPin className="size-4 shrink-0" />
+          {UNSUPPORTED_JURISDICTION_MESSAGE}
         </div>
       )}
 
@@ -598,7 +610,7 @@ export default async function ComplianceDashboardPage({
             <Section title="Open Issues"            items={openIssues}   emptyText="No open issues."         accent="text-red-600" />
             <Section title="Expiring Soon (60 days)" items={expiringSoon} emptyText="Nothing expiring soon." accent="text-amber-600" />
             <Section title="Needs Review"           items={needsReview}  emptyText="Nothing to review."     accent="text-blue-600" />
-            <Section title="Resolved / Compliant"   items={resolved}     emptyText="No resolved items yet." accent="text-emerald-600" />
+            <Section title="Resolved"               items={resolved}     emptyText="No resolved items yet." accent="text-emerald-600" />
 
             {/* Mock/demo items — visually isolated */}
             {mockItems.length > 0 && (

@@ -4,8 +4,8 @@
  * evaluateCompliance(propertyId, supabase) is the main entry point.
  * It:
  *   1. Fetches property details
- *   2. Normalizes the address via Atlas
- *   3. Runs all applicable Philadelphia adapters
+ *   2. Resolves the property's stable identity (OPA number, canonical address)
+ *   3. Runs all applicable Philadelphia adapters with enriched query input
  *   4. Stores raw source_records in the DB
  *   5. Applies rules to evaluate each compliance item (with provenance tagging)
  *   6. Writes compliance_items to the DB (upsert)
@@ -18,8 +18,10 @@
  *   pending_source_verification — API was queried but returned nothing; manual check required
  *   mock_demo_only            — placeholder demo data only
  *
- * TODO (multi-city expansion): inject city-specific adapter sets via config.
- * TODO (production): add rate limiting / retry logic around adapter calls.
+ * Query priority (passed to all adapters via AdapterQueryInput):
+ *   1. OPA account number (local_parcel_id from identity resolver) — most reliable
+ *   2. Normalized canonical address (normalized_address from identity resolver)
+ *   3. Raw address fallback — lowest confidence
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -28,6 +30,7 @@ import {
   fetchRentalLicenses,
   evaluateRentalLicenseStatus,
 } from './adapters/rental-license';
+import { fetchRentalSuitability } from './adapters/rental-suitability';
 import { fetchBuildingPermits, fetchInspectionHistory } from './adapters/property-history';
 import {
   resolvePropertyIdentity,
@@ -41,6 +44,7 @@ import type {
   EvaluatedItem,
   OverallStatus,
   AdapterResult,
+  AdapterQueryInput,
   SourceRecord,
   ComplianceItemType,
 } from './types';
@@ -163,13 +167,15 @@ export async function evaluateCompliance(
     .filter(Boolean)
     .join(' ');
 
-  // 2. Resolve property identity (OPA number, geocoords, canonical address)
+  // 2. Resolve property identity (OPA number, geocoords, canonical address).
   //    Use cached OPA number from a prior resolution if available.
-  let opaAccountNumber: string | undefined;
+  let opaAccountNumber: string | undefined | null;
+  let normalizedAddress: string | undefined | null;
 
   if (property.local_parcel_id && property.provider_name?.startsWith('phila_ais')) {
-    // Already resolved via AIS — skip the API call
+    // Already resolved via AIS — skip the API call and use cached values
     opaAccountNumber = property.local_parcel_id;
+    normalizedAddress = property.normalized_address;
   } else {
     const rawAddr = {
       addressLine1: property.address_line1,
@@ -180,13 +186,11 @@ export async function evaluateCompliance(
     };
 
     const identity = await resolvePropertyIdentity(rawAddr);
-
-    // Persist resolved identity fields onto the property row
     await persistPropertyIdentity(supabase, propertyId, identity);
 
-    opaAccountNumber = identity.localParcelId ?? undefined;
+    opaAccountNumber = identity.localParcelId;
+    normalizedAddress = identity.normalizedAddress;
 
-    // Also store in property_aliases for cross-reference queries
     if (opaAccountNumber) {
       await supabase
         .from('property_aliases')
@@ -200,29 +204,40 @@ export async function evaluateCompliance(
   const isPhiladelphia =
     property.city?.toLowerCase().includes('philadelphia') && property.state === 'PA';
 
-  // 3. Run all applicable adapters concurrently
+  // 3. Build the enriched query input for all adapters
+  const queryInput: AdapterQueryInput = {
+    addressRaw,
+    normalizedAddress: normalizedAddress ?? undefined,
+    opaAccountNumber: opaAccountNumber ?? undefined,
+    city: property.city,
+    state: property.state,
+  };
+
+  // 4. Run all applicable adapters concurrently
   const adapterResults: AdapterResult[] = await Promise.all([
-    fetchLniViolations(addressRaw, opaAccountNumber),
-    fetchRentalLicenses(addressRaw, opaAccountNumber),
+    fetchLniViolations(queryInput),
+    fetchRentalLicenses(queryInput),
+    fetchRentalSuitability(queryInput),
     ...(isPhiladelphia
       ? [
-          fetchBuildingPermits(addressRaw, opaAccountNumber),
-          fetchInspectionHistory(addressRaw, opaAccountNumber),
+          fetchBuildingPermits(queryInput),
+          fetchInspectionHistory(queryInput),
         ]
       : []),
   ]);
 
-  // 4. Persist all source records
+  // 5. Persist all source records
   const allRecords: SourceRecord[] = adapterResults.flatMap((r) => r.records);
   const recordIdMap = await persistSourceRecords(supabase, propertyId, allRecords);
 
-  // 5. Apply compliance rules
+  // 6. Apply compliance rules
   const evaluatedItems: EvaluatedItem[] = [];
 
   // ── Rule: Rental License ──────────────────────────────────────────────────
   const licenseAdapter = adapterResults.find((r) => r.adapterName === 'rental_license');
   const licenseRecords = licenseAdapter?.records ?? [];
   const licenseAdapterSucceeded = licenseAdapter?.success ?? false;
+  const licenseMatchState = licenseAdapter?.matchState ?? 'query_failed';
   const licenseEval = evaluateRentalLicenseStatus(licenseRecords);
 
   let licenseStatus: ComplianceStatus;
@@ -231,18 +246,16 @@ export async function evaluateCompliance(
   let licenseSourceId: string | null = null;
   let licenseRetrievedAt: string | null = null;
 
-  if (!licenseAdapterSucceeded) {
-    // API call failed entirely — cannot determine status
+  if (!licenseAdapterSucceeded || licenseMatchState === 'query_failed') {
     licenseStatus = 'needs_review';
     licenseConfidence = 'needs_review';
     licenseProvenance = 'pending_source_verification';
     licenseRetrievedAt = null;
-  } else if (licenseEval.status === 'not_found') {
-    // API succeeded but returned no matching license records
+  } else if (licenseMatchState === 'no_match_found' || licenseEval.status === 'not_found') {
     licenseStatus = isPhiladelphia ? 'needs_review' : 'unknown';
     licenseConfidence = 'needs_review';
     licenseProvenance = 'pending_source_verification';
-    licenseRetrievedAt = nowIso; // API was called successfully
+    licenseRetrievedAt = nowIso;
   } else {
     licenseStatus =
       licenseEval.status === 'active' ? 'good' :
@@ -260,6 +273,10 @@ export async function evaluateCompliance(
     }
   }
 
+  const licenseMatchMethodLabel = licenseAdapter?.matchMethod
+    ? ` (matched by ${licenseAdapter.matchMethod.replace(/_/g, ' ')})`
+    : '';
+
   const licenseItem: EvaluatedItem = {
     type: 'rental_license' as ComplianceItemType,
     label: 'Philadelphia Rental License',
@@ -270,15 +287,15 @@ export async function evaluateCompliance(
     provenance: licenseProvenance,
     sourceRetrievedAt: licenseRetrievedAt,
     notes:
-      !licenseAdapterSucceeded
-        ? 'L&I license data could not be retrieved (API error). Verify manually at https://li.phila.gov.'
-        : licenseEval.status === 'not_found'
-        ? 'No rental license found in Philadelphia Business License data. If you hold a valid license, verify at https://li.phila.gov.'
+      !licenseAdapterSucceeded || licenseMatchState === 'query_failed'
+        ? `Source unavailable — L&I license data could not be retrieved (API error)${licenseMatchMethodLabel}. Verify manually at https://li.phila.gov.`
+        : licenseMatchState === 'no_match_found' || licenseEval.status === 'not_found'
+        ? `No rental license found in Philadelphia Business License data${licenseMatchMethodLabel}. If you hold a valid license, verify at https://li.phila.gov.`
         : licenseEval.status === 'expiring'
-        ? `Expires in ${licenseEval.daysUntilExpiration} days (${licenseEval.expirationDate}). Renew at the L&I Self-Service portal.`
+        ? `Expires in ${licenseEval.daysUntilExpiration} days (${licenseEval.expirationDate})${licenseMatchMethodLabel}. Renew at the L&I Self-Service portal.`
         : licenseEval.status === 'expired'
-        ? `Expired on ${licenseEval.expirationDate}. Renew immediately to avoid citations.`
-        : `License #${licenseEval.licenseNumber} — active through ${licenseEval.expirationDate}.`,
+        ? `Expired on ${licenseEval.expirationDate}${licenseMatchMethodLabel}. Renew immediately to avoid citations.`
+        : `License #${licenseEval.licenseNumber} — active through ${licenseEval.expirationDate}${licenseMatchMethodLabel}.`,
   };
 
   if (isPhiladelphia || licenseEval.status !== 'not_found') {
@@ -288,24 +305,44 @@ export async function evaluateCompliance(
   // ── Rule: L&I Violations ──────────────────────────────────────────────────
   const violationsAdapter = adapterResults.find((r) => r.adapterName === 'lni_violations');
   const violationsAdapterSucceeded = violationsAdapter?.success ?? false;
+  const violationsMatchState = violationsAdapter?.matchState ?? 'query_failed';
   const violationRecords = violationsAdapter?.records ?? [];
   const { openCount, mostRecentOpenDate, mostRecentOpenDescription } =
     classifyViolations(violationRecords);
+  const violationsMatchMethodLabel = violationsAdapter?.matchMethod
+    ? ` (matched by ${violationsAdapter.matchMethod.replace(/_/g, ' ')})`
+    : '';
 
-  if (!violationsAdapterSucceeded && isPhiladelphia) {
-    // Adapter failed — surface a pending item so the user knows we couldn't check
-    evaluatedItems.push({
-      type: 'open_violation' as ComplianceItemType,
-      label: 'L&I Violations Status',
-      status: 'needs_review',
-      dueDate: null,
-      sourceRecordId: null,
-      confidenceLevel: 'needs_review',
-      provenance: 'pending_source_verification',
-      sourceRetrievedAt: null,
-      notes:
-        'L&I violations data could not be retrieved (API error). Verify open violations manually at https://li.phila.gov.',
-    });
+  if (!violationsAdapterSucceeded || violationsMatchState === 'query_failed') {
+    if (isPhiladelphia) {
+      evaluatedItems.push({
+        type: 'open_violation' as ComplianceItemType,
+        label: 'L&I Violations Status',
+        status: 'needs_review',
+        dueDate: null,
+        sourceRecordId: null,
+        confidenceLevel: 'needs_review',
+        provenance: 'pending_source_verification',
+        sourceRetrievedAt: null,
+        notes:
+          `Source unavailable — L&I violations data could not be retrieved (API error)${violationsMatchMethodLabel}. Verify open violations manually at https://li.phila.gov.`,
+      });
+    }
+  } else if (violationsMatchState === 'no_match_found') {
+    // Queried successfully; no violations found — this is a positive result
+    if (isPhiladelphia) {
+      evaluatedItems.push({
+        type: 'open_violation' as ComplianceItemType,
+        label: 'L&I Violations',
+        status: 'good',
+        dueDate: null,
+        sourceRecordId: null,
+        confidenceLevel: 'verified',
+        provenance: 'verified_from_source',
+        sourceRetrievedAt: nowIso,
+        notes: `No open violations found in L&I records${violationsMatchMethodLabel}.`,
+      });
+    }
   } else if (openCount > 0) {
     const vSourceId = mostRecentOpenDate
       ? (recordIdMap.get(`philly_lni_violations:${mostRecentOpenDate}`) ?? null)
@@ -320,7 +357,24 @@ export async function evaluateCompliance(
       confidenceLevel: 'verified',
       provenance: 'verified_from_source',
       sourceRetrievedAt: nowIso,
-      notes: `${openCount} open violation${openCount > 1 ? 's' : ''}. Most recent: ${mostRecentOpenDescription ?? 'See L&I records'} (${mostRecentOpenDate}).`,
+      notes: `${openCount} open violation${openCount > 1 ? 's' : ''}${violationsMatchMethodLabel}. Most recent: ${mostRecentOpenDescription ?? 'See L&I records'} (${mostRecentOpenDate}).`,
+    });
+  }
+
+  // ── Rule: Certificate of Rental Suitability ───────────────────────────────
+  if (isPhiladelphia) {
+    evaluatedItems.push({
+      type: 'cert_of_rental_suitability' as ComplianceItemType,
+      label: 'Certificate of Rental Suitability',
+      status: 'needs_review',
+      dueDate: null,
+      sourceRecordId: null,
+      confidenceLevel: 'needs_review',
+      provenance: 'derived_from_rule',
+      sourceRetrievedAt: null,
+      notes:
+        'Required for each new tenancy in Philadelphia. No public dataset available — ' +
+        'obtain from the L&I Self-Service portal (https://li.phila.gov) before executing a new lease.',
     });
   }
 
@@ -340,23 +394,6 @@ export async function evaluateCompliance(
         `certification before any child under 6 occupies a unit. ` +
         `Verify certification status manually — not available in public data. ` +
         `Contact Philadelphia Lead and Healthy Homes Program: (215) 685-2788.`,
-    });
-  }
-
-  // ── Rule: Certificate of Rental Suitability ───────────────────────────────
-  if (isPhiladelphia) {
-    evaluatedItems.push({
-      type: 'cert_of_rental_suitability' as ComplianceItemType,
-      label: 'Certificate of Rental Suitability',
-      status: 'needs_review',
-      dueDate: null,
-      sourceRecordId: null,
-      confidenceLevel: 'needs_review',
-      provenance: 'derived_from_rule',
-      sourceRetrievedAt: null,
-      notes:
-        'Required for each new tenancy in Philadelphia. Obtain from the L&I Self-Service portal ' +
-        '(https://li.phila.gov) before executing a new lease. Not tracked in public data — verify manually.',
     });
   }
 
@@ -411,17 +448,17 @@ export async function evaluateCompliance(
     }
   }
 
-  // 6. Compute overall status
+  // 7. Compute overall status
   const overallStatus = deriveOverallStatus(evaluatedItems);
   const itemSummary = buildItemSummary(evaluatedItems);
   const hasMockData = evaluatedItems.some((i) => i.provenance === 'mock_demo_only');
 
-  // 7. Upsert compliance items to DB
+  // 8. Upsert compliance items to DB
   await Promise.all(
     evaluatedItems.map((item) => upsertComplianceItem(supabase, propertyId, item)),
   );
 
-  // 8. Write status snapshot
+  // 9. Write status snapshot
   await supabase.from('status_snapshots').insert({
     property_id: propertyId,
     overall_status: overallStatus,
@@ -454,7 +491,6 @@ export function detectAlertChanges(
   const prevMap = new Map(previousItems.map((i) => [i.type, i.status]));
 
   for (const item of newEval.items) {
-    // Never alert on mock/demo data
     if (item.provenance === 'mock_demo_only') continue;
 
     const prev = prevMap.get(item.type);

@@ -63,7 +63,7 @@ function statusBadgeCls(status: string): string {
 
 function statusLabel(status: string): string {
   switch (status) {
-    case 'compliant':        return 'No Active Issues';
+    case 'compliant':        return 'No Active Issues Found';
     case 'attention_needed': return 'Attention Needed';
     case 'non_compliant':    return 'Issues Found';
     default:                 return 'Not Evaluated';

@@ -58,9 +58,17 @@ export async function POST(req: Request) {
 
   const opaAccountNumber = (body.opaAccountNumber ?? '').trim() || undefined;
 
+  const queryInput = {
+    addressRaw: address,
+    normalizedAddress: null,
+    opaAccountNumber: opaAccountNumber ?? null,
+    city: 'Philadelphia',
+    state: 'PA',
+  };
+
   const [violationsResult, licenseResult] = await Promise.all([
-    fetchLniViolations(address, opaAccountNumber),
-    fetchRentalLicenses(address, opaAccountNumber),
+    fetchLniViolations(queryInput),
+    fetchRentalLicenses(queryInput),
   ]);
 
   const violations = classifyViolations(violationsResult.records);
@@ -99,14 +107,19 @@ export async function POST(req: Request) {
     adapters: {
       lni_violations: {
         success: violationsResult.success,
+        matchMethod: violationsResult.matchMethod,
+        matchState: violationsResult.matchState,
+        queryInput: violationsResult.queryInput,
         error: violationsResult.error ?? null,
         recordCount: violationsResult.records.length,
         classification: violations,
-        // Include first 5 raw records for inspection
         sample: violationsResult.records.slice(0, 5).map((r) => r.rawData),
       },
       rental_license: {
         success: licenseResult.success,
+        matchMethod: licenseResult.matchMethod,
+        matchState: licenseResult.matchState,
+        queryInput: licenseResult.queryInput,
         error: licenseResult.error ?? null,
         recordCount: licenseResult.records.length,
         classification: licenseStatus,

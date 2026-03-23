@@ -77,7 +77,7 @@ function statusIcon(status: string) {
 
 function statusLabel(status: string): string {
   const map: Record<string, string> = {
-    good: 'Compliant', closed: 'Resolved', expiring: 'Expiring Soon',
+    good: 'No Active Issues Found', closed: 'Resolved', expiring: 'Expiring Soon',
     expired: 'Expired', open_violation: 'Open Violation',
     needs_review: 'Needs Review', unknown: 'Unknown',
   };
@@ -332,7 +332,7 @@ export default async function ComplianceReportPage({
           <ReportSection title="Open Issues"             items={openIssues}   emptyText="No open issues — property is clear." />
           <ReportSection title="Expiring Soon (60 days)" items={expiringSoon} emptyText="No items expiring in the next 60 days." />
           <ReportSection title="Needs Review"            items={needsReview}  emptyText="No items requiring manual review." />
-          <ReportSection title="Resolved / Compliant"    items={resolved}     emptyText="No resolved items on record." />
+          <ReportSection title="Resolved"                 items={resolved}     emptyText="No resolved items on record." />
 
           {hasMock && (
             <section className="space-y-2 rounded-lg border-2 border-dashed border-slate-200 p-4">
