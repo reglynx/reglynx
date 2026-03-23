@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createClient } from '@/lib/supabase/client';
+
 import {
   Card,
   CardContent,
@@ -31,7 +33,12 @@ const signupSchema = z
 
 type SignupFormData = z.infer<typeof signupSchema>;
 
-export default function SignupPage() {
+function SignupForm() {
+  const searchParams = useSearchParams();
+  const intent = searchParams.get('intent');
+  const docType = searchParams.get('doc_type');
+  const jurisdiction = searchParams.get('jurisdiction');
+
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -44,12 +51,27 @@ export default function SignupPage() {
     resolver: zodResolver(signupSchema),
   });
 
+  // Store the user's intent so we can redirect after onboarding
+  useEffect(() => {
+    if (intent === 'generate' && docType) {
+      sessionStorage.setItem(
+        'reglynx_intent',
+        JSON.stringify({
+          intent,
+          doc_type: docType,
+          jurisdiction: jurisdiction || 'federal',
+        })
+      );
+    }
+  }, [intent, docType, jurisdiction]);
+
   async function onSubmit(data: SignupFormData) {
     setIsLoading(true);
     setError(null);
 
     try {
       const supabase = createClient();
+
       const { error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
@@ -143,10 +165,16 @@ export default function SignupPage() {
               placeholder="Acme Property Management"
               autoComplete="organization"
               {...register('companyName')}
-              className={errors.companyName ? 'border-red-300 focus-visible:ring-red-200' : ''}
+              className={
+                errors.companyName
+                  ? 'border-red-300 focus-visible:ring-red-200'
+                  : ''
+              }
             />
             {errors.companyName && (
-              <p className="text-xs text-red-600">{errors.companyName.message}</p>
+              <p className="text-xs text-red-600">
+                {errors.companyName.message}
+              </p>
             )}
           </div>
 
@@ -160,7 +188,11 @@ export default function SignupPage() {
               placeholder="you@company.com"
               autoComplete="email"
               {...register('email')}
-              className={errors.email ? 'border-red-300 focus-visible:ring-red-200' : ''}
+              className={
+                errors.email
+                  ? 'border-red-300 focus-visible:ring-red-200'
+                  : ''
+              }
             />
             {errors.email && (
               <p className="text-xs text-red-600">{errors.email.message}</p>
@@ -177,10 +209,16 @@ export default function SignupPage() {
               placeholder="At least 8 characters"
               autoComplete="new-password"
               {...register('password')}
-              className={errors.password ? 'border-red-300 focus-visible:ring-red-200' : ''}
+              className={
+                errors.password
+                  ? 'border-red-300 focus-visible:ring-red-200'
+                  : ''
+              }
             />
             {errors.password && (
-              <p className="text-xs text-red-600">{errors.password.message}</p>
+              <p className="text-xs text-red-600">
+                {errors.password.message}
+              </p>
             )}
           </div>
 
@@ -194,10 +232,16 @@ export default function SignupPage() {
               placeholder="Repeat your password"
               autoComplete="new-password"
               {...register('confirmPassword')}
-              className={errors.confirmPassword ? 'border-red-300 focus-visible:ring-red-200' : ''}
+              className={
+                errors.confirmPassword
+                  ? 'border-red-300 focus-visible:ring-red-200'
+                  : ''
+              }
             />
             {errors.confirmPassword && (
-              <p className="text-xs text-red-600">{errors.confirmPassword.message}</p>
+              <p className="text-xs text-red-600">
+                {errors.confirmPassword.message}
+              </p>
             )}
           </div>
 
@@ -221,5 +265,13 @@ export default function SignupPage() {
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div />}>
+      <SignupForm />
+    </Suspense>
   );
 }
