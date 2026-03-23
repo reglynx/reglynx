@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, ExternalLink, Zap } from 'lucide-react';
+import Link from 'next/link';
+import { Loader2, ExternalLink, Zap, MapPin } from 'lucide-react';
 import { SUBSCRIPTION_PLANS } from '@/lib/constants';
 
 interface BillingActionsProps {
@@ -9,6 +10,8 @@ interface BillingActionsProps {
   hasStripeCustomer: boolean;
   isSubscribed: boolean;
   currentPlan: string;
+  /** True if org has ≥1 property in a supported jurisdiction (e.g. Philadelphia) */
+  hasPhillyProperties: boolean;
 }
 
 export function BillingActions({
@@ -16,6 +19,7 @@ export function BillingActions({
   hasStripeCustomer,
   isSubscribed,
   currentPlan,
+  hasPhillyProperties,
 }: BillingActionsProps) {
   const [loading, setLoading] = useState<null | 'pilot' | 'portal'>(null);
   const [error, setError] = useState<string | null>(null);
@@ -67,8 +71,8 @@ export function BillingActions({
         <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>
       )}
 
-      {/* Primary CTA: upgrade to pilot if not already on it */}
-      {!isSubscribed && (
+      {/* Primary CTA: gate on supported jurisdiction */}
+      {!isSubscribed && hasPhillyProperties && (
         <div className="rounded-lg border-2 border-slate-900 bg-slate-900 p-4 text-white space-y-2">
           <div className="flex items-center gap-2">
             <Zap className="size-4 text-amber-400 shrink-0" />
@@ -91,6 +95,28 @@ export function BillingActions({
               Stripe price not yet configured — contact support@reglynx.com
             </p>
           )}
+        </div>
+      )}
+
+      {/* Waitlist CTA: org has no properties in a supported jurisdiction */}
+      {!isSubscribed && !hasPhillyProperties && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <MapPin className="size-4 text-blue-500 shrink-0" />
+            <span className="font-semibold text-sm text-blue-900">Coverage not yet active in your jurisdiction</span>
+          </div>
+          <p className="text-xs text-blue-700 leading-relaxed">
+            Live compliance monitoring is currently available for Philadelphia, PA.
+            Add a Philadelphia property to activate monitoring, or join the waitlist
+            to be notified when your city goes live.
+          </p>
+          <Link
+            href="/early-access"
+            className="mt-1 flex w-full items-center justify-center gap-2 rounded-md border border-blue-300 bg-white px-4 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50"
+          >
+            <MapPin className="size-4" />
+            Notify me when available
+          </Link>
         </div>
       )}
 

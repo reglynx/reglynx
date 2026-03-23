@@ -25,6 +25,7 @@ import type {
   AdapterMatchState,
   SourceRecord,
 } from '../types';
+import { logger } from '@/lib/debug-logger';
 
 const DATASET_URL = 'https://data.phila.gov/resource/6vkh-6s3i.json';
 const SOURCE_PAGE = 'https://www.opendataphilly.org/datasets/l-i-violations';
@@ -104,9 +105,7 @@ export async function fetchLniViolations(
 
   const sourceEndpoint = `${DATASET_URL}?$where=${encodeURIComponent(whereClause)}&$limit=50&$order=violationdate DESC`;
 
-  console.log(
-    `[lni-violations] query method=${matchMethod} input="${queryInput}" endpoint=${DATASET_URL}`,
-  );
+  logger.info('adapter_execution', 'L&I violations query', { adapter: 'lni_violations', matchMethod, queryInput, endpoint: DATASET_URL });
 
   try {
     const res = await fetch(sourceEndpoint, {
@@ -115,7 +114,7 @@ export async function fetchLniViolations(
     });
 
     if (!res.ok) {
-      console.error(`[lni-violations] API error ${res.status} ${res.statusText} (method=${matchMethod})`);
+      logger.error('adapter_execution', 'L&I violations API error', { status: res.status, matchMethod });
       return {
         adapterName: 'lni_violations',
         success: false,
@@ -132,9 +131,7 @@ export async function fetchLniViolations(
     const records: LniViolationRecord[] = await res.json();
     const recordCount = records.length;
 
-    console.log(
-      `[lni-violations] method=${matchMethod} records=${recordCount}`,
-    );
+    logger.info('adapter_execution', 'L&I violations fetched', { adapter: 'lni_violations', matchMethod, recordCount, matchState: recordCount > 0 ? 'verified_match' : 'no_match_found' });
 
     const matchState: AdapterMatchState =
       recordCount > 0 ? 'verified_match' : 'no_match_found';
@@ -160,7 +157,7 @@ export async function fetchLniViolations(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[lni-violations] fetch error (method=${matchMethod}):`, message);
+    logger.error('adapter_execution', 'L&I violations fetch error', { adapter: 'lni_violations', matchMethod, error: message });
     return {
       adapterName: 'lni_violations',
       success: false,

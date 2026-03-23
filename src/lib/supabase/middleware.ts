@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { logger } from '@/lib/debug-logger';
 
 /**
  * Refreshes the Supabase session cookie on every request and enforces
@@ -63,6 +64,7 @@ export async function updateSession(request: NextRequest) {
     '/terms',
     '/privacy',
     '/onboarding',
+    '/early-access',
   ];
 
   // API routes handle their own auth — middleware only needs to refresh the
@@ -77,24 +79,27 @@ export async function updateSession(request: NextRequest) {
 
   // Redirect unauthenticated users away from protected pages
   if (!user && !isPublicPath) {
+    logger.debug('auth', 'Unauthenticated access → redirect to login', { pathname });
     const url = request.nextUrl.clone();
     url.pathname = '/login';
-    // Preserve the intended destination so we can redirect back after login
     url.searchParams.set('next', pathname);
     const redirect = NextResponse.redirect(url);
-    // Auth redirects must not be cached
     redirect.headers.set('Cache-Control', 'no-store');
     return redirect;
   }
 
   // Redirect already-authenticated users away from login / signup pages
   if (user && (pathname.startsWith('/login') || pathname.startsWith('/signup'))) {
-    const url = request.nextUrl.clone();
-    // Honor ?next= param if present; fall back to dashboard
     const next = request.nextUrl.searchParams.get('next') ?? '/dashboard';
+    logger.debug('auth', 'Authenticated user on auth page → redirect', { pathname, next });
+    const url = request.nextUrl.clone();
     url.pathname = next.startsWith('/') ? next : '/dashboard';
     url.search = '';
     return NextResponse.redirect(url);
+  }
+
+  if (user) {
+    logger.debug('auth', 'Session refreshed', { pathname, userId: user.id });
   }
 
   // Return the supabaseResponse — it carries the refreshed Set-Cookie headers.

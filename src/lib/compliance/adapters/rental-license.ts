@@ -26,6 +26,7 @@ import type {
   AdapterMatchState,
   SourceRecord,
 } from '../types';
+import { logger } from '@/lib/debug-logger';
 
 const DATASET_URL = 'https://data.phila.gov/resource/jp3q-4wb6.json';
 const SOURCE_PAGE = 'https://www.opendataphilly.org/datasets/business-licenses';
@@ -131,9 +132,7 @@ export async function fetchRentalLicenses(
 
   const sourceEndpoint = `${DATASET_URL}?$where=${encodeURIComponent(whereClause)}&$limit=10&$order=expirationdate DESC`;
 
-  console.log(
-    `[rental-license] query method=${matchMethod} input="${queryInput}" endpoint=${DATASET_URL}`,
-  );
+  logger.info('adapter_execution', 'Rental license query', { adapter: 'rental_license', matchMethod, queryInput, endpoint: DATASET_URL });
 
   try {
     const res = await fetch(sourceEndpoint, {
@@ -142,7 +141,7 @@ export async function fetchRentalLicenses(
     });
 
     if (!res.ok) {
-      console.error(`[rental-license] API error ${res.status} ${res.statusText} (method=${matchMethod})`);
+      logger.error('adapter_execution', 'Rental license API error', { status: res.status, matchMethod });
       return {
         adapterName: 'rental_license',
         success: false,
@@ -159,7 +158,7 @@ export async function fetchRentalLicenses(
     const records: RentalLicenseRecord[] = await res.json();
     const recordCount = records.length;
 
-    console.log(`[rental-license] method=${matchMethod} records=${recordCount}`);
+    logger.info('adapter_execution', 'Rental license fetched', { adapter: 'rental_license', matchMethod, recordCount, matchState: recordCount > 0 ? 'verified_match' : 'no_match_found' });
 
     const matchState: AdapterMatchState =
       recordCount > 0 ? 'verified_match' : 'no_match_found';
@@ -187,7 +186,7 @@ export async function fetchRentalLicenses(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[rental-license] fetch error (method=${matchMethod}):`, message);
+    logger.error('adapter_execution', 'Rental license fetch error', { adapter: 'rental_license', matchMethod, error: message });
     return {
       adapterName: 'rental_license',
       success: false,

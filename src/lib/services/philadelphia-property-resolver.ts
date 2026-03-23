@@ -18,6 +18,7 @@
 
 import type { RawPropertyAddress, PropertyIdentity } from './property-identity-resolver';
 import { normalizeAddress, geocodeAddress } from './property-identity-resolver';
+import { logger } from '@/lib/debug-logger';
 
 const AIS_BASE = 'https://api.phila.gov/ais/v1';
 
@@ -64,14 +65,14 @@ async function queryAis(singleLineAddress: string): Promise<AisProperties | null
 
     if (res.status === 404) return null;
     if (!res.ok) {
-      console.warn('[philly-resolver] AIS returned', res.status);
+      logger.warn('property_resolution', 'Philadelphia AIS returned error', { status: res.status, address: singleLineAddress });
       return null;
     }
 
     const data: AisResponse = await res.json();
     return data.features?.[0]?.properties ?? null;
   } catch (err) {
-    console.warn('[philly-resolver] AIS fetch failed:', err);
+    logger.warn('property_resolution', 'Philadelphia AIS request failed', { address: singleLineAddress, error: String(err) });
     return null;
   }
 }
@@ -97,6 +98,7 @@ export async function resolvePhiladelphiaIdentity(
 
   if (aisResult) {
     const opaNum = aisResult.opa_account_num?.trim() || null;
+    logger.info('property_resolution', 'AIS lookup succeeded', { address: singleLine, opaAccountNum: opaNum, confidence: opaNum ? 0.97 : 0.80 });
     return {
       normalizedAddress: aisResult.street_address ?? aisResult.opa_address ?? singleLine,
       latitude: aisResult.lat ?? null,
@@ -114,9 +116,11 @@ export async function resolvePhiladelphiaIdentity(
   }
 
   // ── 2. Fall back to Census geocoder ─────────────────────────────────────────
+  logger.warn('property_resolution', 'AIS returned no match — falling back to Census geocoder', { address: singleLine });
   const geocoded = await geocodeAddress(singleLine);
 
   if (geocoded) {
+    logger.info('property_resolution', 'Census geocoder fallback succeeded for Philadelphia property', { address: geocoded.address });
     return {
       normalizedAddress: geocoded.address,
       latitude: geocoded.coordinates.y,
@@ -133,6 +137,7 @@ export async function resolvePhiladelphiaIdentity(
   }
 
   // ── 3. Both sources failed — signal caller to try something else ─────────────
+  logger.error('property_resolution', 'Both AIS and Census geocoder failed for Philadelphia property', { address: singleLine });
   return null;
 }
 

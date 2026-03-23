@@ -21,6 +21,7 @@ import type {
   AdapterMatchState,
   SourceRecord,
 } from '../types';
+import { logger } from '@/lib/debug-logger';
 
 const PERMITS_URL = 'https://data.phila.gov/resource/nc89-3ue8.json';
 const INSPECTIONS_URL = 'https://data.phila.gov/resource/g4i8-nerb.json';
@@ -116,9 +117,7 @@ export async function fetchBuildingPermits(
 
   const sourceEndpoint = `${PERMITS_URL}?$where=${encodeURIComponent(whereClause)}&$limit=25&$order=permitissuedate DESC`;
 
-  console.log(
-    `[building-permits] query method=${matchMethod} input="${queryInput}" endpoint=${PERMITS_URL}`,
-  );
+  logger.info('adapter_execution', 'Building permits query', { adapter: 'building_permits', matchMethod, queryInput, endpoint: PERMITS_URL });
 
   try {
     const res = await fetch(sourceEndpoint, {
@@ -127,7 +126,7 @@ export async function fetchBuildingPermits(
     });
 
     if (!res.ok) {
-      console.error(`[building-permits] API error ${res.status} (method=${matchMethod})`);
+      logger.error('adapter_execution', 'Building permits API error', { status: res.status, matchMethod });
       return {
         adapterName: 'building_permits',
         success: false,
@@ -144,7 +143,7 @@ export async function fetchBuildingPermits(
     const records: PermitRecord[] = await res.json();
     const recordCount = records.length;
 
-    console.log(`[building-permits] method=${matchMethod} records=${recordCount}`);
+    logger.info('adapter_execution', 'Building permits fetched', { adapter: 'building_permits', matchMethod, recordCount, matchState: recordCount > 0 ? 'verified_match' : 'no_match_found' });
 
     const matchState: AdapterMatchState =
       recordCount > 0 ? 'verified_match' : 'no_match_found';
@@ -172,7 +171,7 @@ export async function fetchBuildingPermits(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[building-permits] fetch error (method=${matchMethod}):`, message);
+    logger.error('adapter_execution', 'Building permits fetch error', { adapter: 'building_permits', matchMethod, error: message });
     return {
       adapterName: 'building_permits',
       success: false,
@@ -203,9 +202,7 @@ export async function fetchInspectionHistory(
 
   const sourceEndpoint = `${INSPECTIONS_URL}?$where=${encodeURIComponent(whereClause)}&$limit=25&$order=inspectiondate DESC`;
 
-  console.log(
-    `[inspection-history] query method=${matchMethod} input="${queryInput}" endpoint=${INSPECTIONS_URL}`,
-  );
+  logger.info('adapter_execution', 'Inspection history query', { adapter: 'inspection_history', matchMethod, queryInput, endpoint: INSPECTIONS_URL });
 
   try {
     const res = await fetch(sourceEndpoint, {
@@ -214,7 +211,7 @@ export async function fetchInspectionHistory(
     });
 
     if (!res.ok) {
-      console.error(`[inspection-history] API error ${res.status} (method=${matchMethod})`);
+      logger.error('adapter_execution', 'Inspection history API error', { status: res.status, matchMethod });
       return {
         adapterName: 'inspection_history',
         success: false,
@@ -231,7 +228,7 @@ export async function fetchInspectionHistory(
     const records: InspectionRecord[] = await res.json();
     const recordCount = records.length;
 
-    console.log(`[inspection-history] method=${matchMethod} records=${recordCount}`);
+    logger.info('adapter_execution', 'Inspection history fetched', { adapter: 'inspection_history', matchMethod, recordCount, matchState: recordCount > 0 ? 'verified_match' : 'no_match_found' });
 
     const matchState: AdapterMatchState =
       recordCount > 0 ? 'verified_match' : 'no_match_found';
@@ -257,7 +254,7 @@ export async function fetchInspectionHistory(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`[inspection-history] fetch error (method=${matchMethod}):`, message);
+    logger.error('adapter_execution', 'Inspection history fetch error', { adapter: 'inspection_history', matchMethod, error: message });
     return {
       adapterName: 'inspection_history',
       success: false,

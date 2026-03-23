@@ -19,6 +19,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolvePhiladelphiaIdentity } from './philadelphia-property-resolver';
+import { logger } from '@/lib/debug-logger';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -113,7 +114,7 @@ export async function geocodeAddress(
     });
 
     if (!res.ok) {
-      console.warn('[geocoder] Census API returned', res.status);
+      logger.warn('property_resolution', 'Census geocoder returned error', { status: res.status, address: singleLineAddress });
       return null;
     }
 
@@ -126,7 +127,7 @@ export async function geocodeAddress(
     // First match is the best match
     return matches[0];
   } catch (err) {
-    console.warn('[geocoder] Census geocode failed:', err);
+    logger.warn('property_resolution', 'Census geocode request failed', { address: singleLineAddress, error: String(err) });
     return null;
   }
 }
@@ -149,19 +150,34 @@ export async function resolvePropertyIdentity(
     addr.state === 'PA' &&
     addr.city.toLowerCase().replace(/\s+/g, '').includes('philadelphia');
 
+  const singleLine = normalizeAddress(addr);
+  logger.info('property_resolution', 'Resolving property identity', { normalizedAddress: singleLine, isPhiladelphia });
+
   // ── Philadelphia-specific path ──────────────────────────────────────────────
   if (isPhiladelphia) {
     const phillyResult = await resolvePhiladelphiaIdentity(addr);
-    if (phillyResult) return phillyResult;
-    // Fall through to Census geocoder if OPA lookup failed
+    if (phillyResult) {
+      logger.info('property_resolution', 'Philadelphia AIS resolution succeeded', {
+        normalizedAddress: phillyResult.normalizedAddress,
+        localParcelId: phillyResult.localParcelId,
+        providerName: phillyResult.providerName,
+        confidence: phillyResult.providerConfidence,
+      });
+      return phillyResult;
+    }
+    logger.warn('property_resolution', 'Philadelphia AIS resolution failed — falling back to Census', { address: singleLine });
   }
 
   // ── Generic path: Census Geocoder ──────────────────────────────────────────
-  const singleLine = normalizeAddress(addr);
   const geocoded = await geocodeAddress(singleLine);
 
   if (geocoded) {
     const components = geocoded.addressComponents;
+    logger.info('property_resolution', 'Census geocoder resolution succeeded', {
+      normalizedAddress: geocoded.address,
+      city: components?.city ?? addr.city,
+      state: components?.state ?? addr.state,
+    });
     return {
       normalizedAddress: geocoded.address,
       latitude: geocoded.coordinates.y,
@@ -178,6 +194,7 @@ export async function resolvePropertyIdentity(
   }
 
   // ── Last resort: return normalized form of the user-entered address ─────────
+  logger.warn('property_resolution', 'All geocoder sources failed — using user input fallback', { address: singleLine });
   return {
     normalizedAddress: singleLine,
     latitude: null,
@@ -224,6 +241,8 @@ export async function persistPropertyIdentity(
     .eq('id', propertyId);
 
   if (error) {
-    console.error('[property-identity-resolver] persist failed:', error.message);
+    logger.error('property_resolution', 'Failed to persist property identity', { propertyId, error: error.message });
+  } else {
+    logger.info('property_resolution', 'Property identity persisted', { propertyId, providerName: identity.providerName });
   }
 }

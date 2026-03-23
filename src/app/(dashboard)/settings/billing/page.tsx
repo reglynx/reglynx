@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SUBSCRIPTION_PLANS } from '@/lib/constants';
 import { BillingActions } from './BillingActions';
+import { isJurisdictionSupported } from '@/lib/providers/jurisdiction-config';
 import type { Organization } from '@/lib/types';
 
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
@@ -33,10 +34,14 @@ export default async function BillingPage({
 
   if (!org) redirect('/onboarding');
 
-  const { count: propCount } = await supabase
+  const { data: propertiesData, count: propCount } = await supabase
     .from('properties')
-    .select('*', { count: 'exact', head: true })
+    .select('id, city, state', { count: 'exact' })
     .eq('org_id', org.id);
+
+  const hasPhillyProperties = (propertiesData ?? []).some((p) =>
+    isJurisdictionSupported(p.city ?? '', p.state ?? ''),
+  );
 
   const planKey = org.subscription_plan ?? 'starter';
   const plan = SUBSCRIPTION_PLANS[planKey as keyof typeof SUBSCRIPTION_PLANS] ?? SUBSCRIPTION_PLANS.starter;
@@ -149,6 +154,7 @@ export default async function BillingPage({
             hasStripeCustomer={Boolean(org.stripe_customer_id)}
             isSubscribed={isActive}
             currentPlan={planKey}
+            hasPhillyProperties={hasPhillyProperties}
           />
         </CardContent>
       </Card>
