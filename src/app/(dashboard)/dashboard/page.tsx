@@ -155,7 +155,12 @@ function buildPilotChecklist(
 // Page
 // ---------------------------------------------------------------------------
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ checkout?: string }>;
+}) {
+  const { checkout } = await searchParams;
   const supabase = await createClient();
 
   const {
@@ -258,6 +263,17 @@ export default async function DashboardPage() {
           Add Property
         </Link>
       </div>
+
+      {/* Checkout success banner */}
+      {checkout === 'success' && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
+          <span>
+            <span className="font-semibold">Payment received.</span> Your pilot plan is activating — it may take a moment to reflect.
+            Head to <Link href="/compliance" className="underline hover:no-underline">Compliance</Link> to run your first check.
+          </span>
+        </div>
+      )}
 
       {/* Pilot access banner */}
       <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">

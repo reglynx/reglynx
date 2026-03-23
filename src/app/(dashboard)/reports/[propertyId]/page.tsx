@@ -22,6 +22,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { PrintButton } from './PrintButton';
+import { CopyReportButton } from './CopyReportButton';
 import { createClient } from '@/lib/supabase/server';
 import {
   buildCoverageMatrix,
@@ -266,6 +267,13 @@ export default async function ComplianceReportPage({
           >
             All Reports
           </Link>
+          <CopyReportButton
+            address={fullAddress}
+            overallLabel={overall.label}
+            openIssues={openIssues.length}
+            expiringSoon={expiringSoon.length}
+            generatedAt={generatedAt}
+          />
           <PrintButton />
         </div>
       </div>

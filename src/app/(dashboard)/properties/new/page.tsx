@@ -8,7 +8,8 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { PROPERTY_TYPES } from '@/lib/constants';
+import { PROPERTY_TYPES, SUBSCRIPTION_PLANS } from '@/lib/constants';
+import type { SubscriptionPlan } from '@/lib/constants';
 import {
   Card,
   CardContent,
@@ -124,7 +125,7 @@ export default function NewPropertyPage() {
         return;
       }
 
-      // Billing gate: free (starter) plan limited to 1 property
+      // Billing gate: enforce per-plan property limits
       const [{ count: propCount }, { data: orgData }] = await Promise.all([
         supabase
           .from('properties')
@@ -137,12 +138,20 @@ export default function NewPropertyPage() {
           .single(),
       ]);
 
-      const isFree =
-        orgData?.subscription_plan === 'starter' &&
-        orgData?.subscription_status !== 'active';
-      if (isFree && (propCount ?? 0) >= 1) {
+      const planKey = (orgData?.subscription_plan ?? 'starter') as SubscriptionPlan;
+      const planInfo = SUBSCRIPTION_PLANS[planKey] ?? SUBSCRIPTION_PLANS.starter;
+      const isActivated =
+        orgData?.subscription_status === 'active' ||
+        orgData?.subscription_status === 'trialing';
+      // Inactive orgs can add 1 property for evaluation; active orgs get their plan limit
+      const effectiveLimit = isActivated ? planInfo.limits.properties : 1;
+      const atLimit = effectiveLimit !== Infinity && (propCount ?? 0) >= effectiveLimit;
+
+      if (atLimit) {
         setError(
-          'Free accounts are limited to 1 property. Upgrade your plan in Settings → Billing to add more.',
+          isActivated
+            ? `Your ${planInfo.name} plan allows up to ${effectiveLimit} ${effectiveLimit === 1 ? 'property' : 'properties'}. Contact support@reglynx.com to upgrade.`
+            : 'Add a billing plan in Settings → Billing to add more properties.',
         );
         return;
       }

@@ -58,6 +58,7 @@ export const SUBSCRIPTION_PLANS = {
     name: 'Starter',
     price: 147,
     priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_STARTER || process.env.STRIPE_PRICE_ID_STARTER || '',
+    description: 'For individual landlords getting started.',
     features: [
       'Up to 5 properties',
       '10 document drafts/month',
@@ -71,10 +72,31 @@ export const SUBSCRIPTION_PLANS = {
       jurisdictions: 2,
     },
   },
+  pilot: {
+    name: 'Philadelphia Pilot',
+    price: 49,
+    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_PILOT || process.env.STRIPE_PRICE_ID_PILOT || '',
+    description: 'Early access: Philadelphia rental property compliance monitoring.',
+    features: [
+      'Up to 5 properties',
+      'Philadelphia Open Data monitoring',
+      'L&I violations + rental license checks',
+      'Daily compliance evaluation',
+      'Email alerts for critical issues',
+      'Compliance reports with source coverage',
+      'Priority pilot support',
+    ],
+    limits: {
+      properties: 5,
+      documentsPerMonth: 20,
+      jurisdictions: 3,
+    },
+  },
   professional: {
     name: 'Professional',
     price: 297,
     priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_PROFESSIONAL || process.env.STRIPE_PRICE_ID_PROFESSIONAL || '',
+    description: 'For property managers with growing portfolios.',
     features: [
       'Up to 25 properties',
       'Unlimited document drafts',
@@ -93,6 +115,7 @@ export const SUBSCRIPTION_PLANS = {
     name: 'Enterprise',
     price: 597,
     priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_ENTERPRISE || process.env.STRIPE_PRICE_ID_ENTERPRISE || '',
+    description: 'For large portfolios and property management companies.',
     features: [
       'Unlimited properties',
       'Unlimited document drafts',
