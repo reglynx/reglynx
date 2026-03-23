@@ -1,6 +1,12 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let _resend: Resend | null = null;
+function getResend(): Resend {
+  if (!_resend) {
+    _resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return _resend;
+}
 
 const FROM_ALERTS =
   process.env.RESEND_FROM_ALERTS || 'RegLynx Alerts <alerts@reglynx.com>';
@@ -63,7 +69,7 @@ export async function sendWelcomeEmail(to: string, orgName: string) {
     'The RegLynx Team',
   ].join('\n');
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM_NOREPLY,
     to,
     subject: `Welcome to RegLynx, ${orgName}!`,
@@ -90,7 +96,7 @@ export async function sendAlertEmail(
     dashboardUrl,
   ].join('\n');
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM_ALERTS,
     to,
     subject: `[RegLynx Alert] ${alertTitle}`,
@@ -118,7 +124,7 @@ export async function sendTrialEndingEmail(
     'The RegLynx Team',
   ].join('\n');
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM_BILLING,
     to,
     subject: `Your RegLynx trial ends in ${daysLeft} day${daysLeft === 1 ? '' : 's'}`,
@@ -141,7 +147,7 @@ export async function sendPaymentFailedEmail(to: string, orgName: string) {
     'The RegLynx Team',
   ].join('\n');
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM_BILLING,
     to,
     subject: `[Action Required] Payment failed for ${orgName}`,
@@ -168,7 +174,7 @@ export async function sendSubscriptionConfirmedEmail(
     'The RegLynx Team',
   ].join('\n');
 
-  await resend.emails.send({
+  await getResend().emails.send({
     from: FROM_BILLING,
     to,
     subject: `Subscription confirmed — ${planName} plan for ${orgName}`,
