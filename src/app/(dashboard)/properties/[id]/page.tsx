@@ -10,6 +10,7 @@ import {
   FileText,
   CheckCircle2,
   Circle,
+  ShieldCheck,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -121,7 +122,16 @@ export default async function PropertyDetailPage({
               {fullAddress}
             </div>
           </div>
-          <Badge variant="secondary">{typeLabel}</Badge>
+          <div className="flex shrink-0 items-center gap-2">
+            <Badge variant="secondary">{typeLabel}</Badge>
+            <Link
+              href={`/compliance/${property.id}`}
+              className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' gap-1.5'}
+            >
+              <ShieldCheck className="size-3.5" />
+              Compliance
+            </Link>
+          </div>
         </CardHeader>
 
         <CardContent>

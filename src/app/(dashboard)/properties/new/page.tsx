@@ -123,33 +123,67 @@ export default function NewPropertyPage() {
         return;
       }
 
-      // Insert the property
-      const { error: insertError } = await supabase.from('properties').insert({
-        org_id: org.id,
-        name: data.name,
-        address_line1: data.address_line1,
-        address_line2: data.address_line2 || null,
-        city: data.city,
-        state: data.state,
-        zip: data.zip,
-        county: data.county || null,
-        property_type: data.property_type,
-        unit_count: data.unit_count,
-        year_built: data.year_built || null,
-        has_lead_paint: data.has_lead_paint,
-        has_pool: data.has_pool,
-        has_elevator: data.has_elevator,
-        is_section8: data.is_section8,
-        is_tax_credit: data.is_tax_credit,
-      });
+      // Billing gate: free (starter) plan limited to 1 property
+      const [{ count: propCount }, { data: orgData }] = await Promise.all([
+        supabase
+          .from('properties')
+          .select('*', { count: 'exact', head: true })
+          .eq('org_id', org.id),
+        supabase
+          .from('organizations')
+          .select('subscription_plan, subscription_status')
+          .eq('owner_id', user.id)
+          .single(),
+      ]);
 
-      if (insertError) {
-        setError(insertError.message);
+      const isFree =
+        orgData?.subscription_plan === 'starter' &&
+        orgData?.subscription_status !== 'active';
+      if (isFree && (propCount ?? 0) >= 1) {
+        setError(
+          'Free accounts are limited to 1 property. Upgrade your plan in Settings → Billing to add more.',
+        );
         return;
       }
 
-      router.push('/properties');
-      router.refresh();
+      // Insert the property
+      const { data: newProp, error: insertError } = await supabase
+        .from('properties')
+        .insert({
+          org_id: org.id,
+          name: data.name,
+          address_line1: data.address_line1,
+          address_line2: data.address_line2 || null,
+          city: data.city,
+          state: data.state,
+          zip: data.zip,
+          county: data.county || null,
+          property_type: data.property_type,
+          unit_count: data.unit_count,
+          year_built: data.year_built || null,
+          has_lead_paint: data.has_lead_paint,
+          has_pool: data.has_pool,
+          has_elevator: data.has_elevator,
+          is_section8: data.is_section8,
+          is_tax_credit: data.is_tax_credit,
+        })
+        .select('id')
+        .single();
+
+      if (insertError || !newProp) {
+        setError(insertError?.message ?? 'Failed to create property.');
+        return;
+      }
+
+      // Kick off compliance evaluation (non-blocking — results visible on compliance page)
+      fetch('/api/compliance/evaluate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ property_id: newProp.id }),
+      }).catch(console.error);
+
+      router.push(`/compliance/${newProp.id}?new=1`);
+      // no router.refresh() needed — navigating to a new page
     } catch {
       setError('An unexpected error occurred. Please try again.');
     } finally {
@@ -403,7 +437,7 @@ export default function NewPropertyPage() {
                 disabled={isLoading}
                 className="bg-[#0f172a] text-white hover:bg-[#1e293b]"
               >
-                {isLoading ? 'Saving...' : 'Add Property'}
+                {isLoading ? 'Adding Property…' : 'Add Property'}
               </Button>
               <Link href="/properties" className={buttonVariants({ variant: "outline" })}>Cancel</Link>
             </div>

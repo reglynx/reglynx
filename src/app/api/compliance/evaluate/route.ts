@@ -3,6 +3,7 @@
  *
  * Trigger compliance evaluation for a specific property.
  * Runs all adapters, stores source records, evaluates items, writes snapshot.
+ * Creates org alerts and sends email for critical/warning items.
  *
  * Body: { property_id: string }
  * Auth: Supabase session (user must own the property's org)
@@ -13,6 +14,7 @@ import * as Sentry from '@sentry/nextjs';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { evaluateCompliance } from '@/lib/compliance/engine';
+import { sendComplianceAlertEmail } from '@/lib/emails/send';
 import type { Organization } from '@/lib/types';
 
 export async function POST(request: Request) {
@@ -40,7 +42,7 @@ export async function POST(request: Request) {
 
     const { data: property } = await supabase
       .from('properties')
-      .select('id')
+      .select('id, address_line1, city, state')
       .eq('id', property_id)
       .eq('org_id', org.id)
       .single();
@@ -66,6 +68,71 @@ export async function POST(request: Request) {
         triggered_by: 'manual',
       },
     });
+
+    // ── Create org alerts for actionable items ──────────────────────────────
+    const alertableItems = evaluation.items.filter(
+      (i) =>
+        i.status === 'open_violation' ||
+        i.status === 'expired' ||
+        i.status === 'expiring',
+    );
+
+    const propertyAddress = [property.address_line1, property.city, property.state]
+      .filter(Boolean)
+      .join(', ');
+
+    let hasCritical = false;
+    let firstCriticalItem: typeof alertableItems[0] | null = null;
+
+    for (const item of alertableItems) {
+      const severity =
+        item.status === 'open_violation' || item.status === 'expired'
+          ? 'critical'
+          : 'warning';
+
+      if (severity === 'critical' && !hasCritical) {
+        hasCritical = true;
+        firstCriticalItem = item;
+      }
+
+      const { data: newAlert } = await serviceClient
+        .from('regulatory_alerts')
+        .insert({
+          title: `${item.label} — ${propertyAddress}`,
+          description: item.notes ?? `${item.label} requires attention.`,
+          source_url: null,
+          source_name: 'compliance_engine',
+          jurisdiction: 'Philadelphia, PA',
+          category: 'property_compliance',
+          severity,
+          effective_date: item.dueDate ?? null,
+          published_date: new Date().toISOString().split('T')[0],
+          affects_document_types: [],
+          is_processed: false,
+        })
+        .select('id')
+        .single();
+
+      if (newAlert?.id) {
+        await serviceClient
+          .from('org_alerts')
+          .insert({
+            org_id: org.id,
+            alert_id: newAlert.id,
+            status: 'unread',
+          });
+      }
+    }
+
+    // ── Send email for critical items ───────────────────────────────────────
+    if (hasCritical && firstCriticalItem && user.email) {
+      sendComplianceAlertEmail(
+        user.email,
+        propertyAddress,
+        firstCriticalItem.label,
+        firstCriticalItem.notes ?? firstCriticalItem.label,
+      ).catch((err) => console.error('[compliance/evaluate] email error:', err));
+    }
 
     return NextResponse.json(evaluation, { status: 200 });
   } catch (error) {

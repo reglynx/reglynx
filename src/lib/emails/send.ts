@@ -155,6 +155,33 @@ export async function sendPaymentFailedEmail(to: string, orgName: string) {
   });
 }
 
+export async function sendComplianceAlertEmail(
+  to: string,
+  propertyAddress: string,
+  issueType: string,
+  message: string,
+) {
+  const body = [
+    `Compliance Issue Detected — ${propertyAddress}`,
+    '',
+    `Issue: ${issueType}`,
+    '',
+    message,
+    '',
+    'Review this property and take action in your RegLynx compliance dashboard:',
+    `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.reglynx.com'}/compliance`,
+    '',
+    'The RegLynx Team',
+  ].join('\n');
+
+  await getResend().emails.send({
+    from: FROM_ALERTS,
+    to,
+    subject: `[RegLynx] Compliance issue — ${propertyAddress}`,
+    text: wrapEmail(body),
+  });
+}
+
 export async function sendSubscriptionConfirmedEmail(
   to: string,
   orgName: string,

@@ -87,6 +87,7 @@ function formatAuditAction(action: string): string {
     property_updated: 'Property updated',
     property_deleted: 'Property deleted',
     org_created: 'Organization created',
+    compliance_evaluated: 'Compliance check run',
   };
   return map[action] ?? action.replace(/_/g, ' ');
 }
@@ -224,11 +225,18 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">
-          Compliance overview for {org.name}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">Compliance overview for {org.name}</p>
+        </div>
+        <Link
+          href="/properties/new"
+          className={buttonVariants({ size: 'sm' }) + ' bg-[#0f172a] text-white hover:bg-[#1e293b]'}
+        >
+          <Plus className="size-3.5" />
+          Add Property
+        </Link>
       </div>
 
       {/* Getting Started checklist (hidden once all done) */}
