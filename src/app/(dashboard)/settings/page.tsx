@@ -6,6 +6,8 @@ import {
   Users,
   Mail,
   ExternalLink,
+  Bell,
+  Download,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import {
@@ -17,8 +19,7 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button-variants';
-import { Separator } from '@/components/ui/separator';
-import { SUBSCRIPTION_PLANS, ENTITY_TYPES } from '@/lib/constants';
+import { SUBSCRIPTION_PLANS } from '@/lib/constants';
 import type { Organization } from '@/lib/types';
 
 const STATUS_BADGE_MAP: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -93,6 +94,10 @@ export default async function SettingsPage() {
               <p className="text-sm font-medium text-muted-foreground">Unit Count</p>
               <p className="text-sm">{org.unit_count ?? 'Not set'}</p>
             </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Account Email</p>
+              <p className="text-sm">{user.email}</p>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -128,14 +133,14 @@ export default async function SettingsPage() {
               })}
             </p>
           )}
-          <Link href="/settings/billing" className={buttonVariants({ variant: "outline", size: "sm" })}>
-              Manage Billing
-              <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
+          <Link href="/settings/billing" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+            Manage Billing
+            <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
           </Link>
         </CardContent>
       </Card>
 
-      {/* Quick Links */}
+      {/* Quick Links Grid */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Card className="transition-colors hover:border-slate-300">
           <Link href="/settings/team" className="block p-6">
@@ -147,6 +152,38 @@ export default async function SettingsPage() {
                 <p className="font-medium">Team</p>
                 <p className="text-sm text-muted-foreground">
                   Manage team members and roles
+                </p>
+              </div>
+            </div>
+          </Link>
+        </Card>
+
+        <Card className="transition-colors hover:border-slate-300">
+          <Link href="/settings/notifications" className="block p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
+                <Bell className="h-5 w-5 text-slate-600" />
+              </div>
+              <div>
+                <p className="font-medium">Notifications</p>
+                <p className="text-sm text-muted-foreground">
+                  Alert email preferences and digest frequency
+                </p>
+              </div>
+            </div>
+          </Link>
+        </Card>
+
+        <Card className="transition-colors hover:border-slate-300">
+          <Link href="/settings/export" className="block p-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
+                <Download className="h-5 w-5 text-slate-600" />
+              </div>
+              <div>
+                <p className="font-medium">Data Export</p>
+                <p className="text-sm text-muted-foreground">
+                  Download all documents and data
                 </p>
               </div>
             </div>

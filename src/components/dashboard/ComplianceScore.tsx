@@ -2,9 +2,15 @@
 
 interface ComplianceScoreProps {
   score: number;
+  totalRequired?: number;
+  totalCurrent?: number;
 }
 
-export function ComplianceScore({ score }: ComplianceScoreProps) {
+export function ComplianceScore({
+  score,
+  totalRequired = 0,
+  totalCurrent = 0,
+}: ComplianceScoreProps) {
   const radius = 80;
   const strokeWidth = 12;
   const circumference = 2 * Math.PI * radius;
@@ -18,6 +24,7 @@ export function ComplianceScore({ score }: ComplianceScoreProps) {
   };
 
   const color = getColor(score);
+  const missing = totalRequired - totalCurrent;
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -56,7 +63,17 @@ export function ComplianceScore({ score }: ComplianceScoreProps) {
           <span className={`text-5xl font-bold ${color.text}`}>{score}</span>
         </div>
       </div>
-      <p className="text-sm font-medium text-muted-foreground">Compliance Score</p>
+      <div className="text-center space-y-1">
+        <p className="text-sm font-medium text-muted-foreground">Compliance Score</p>
+        {totalRequired > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {totalCurrent} of {totalRequired} required documents generated
+            {missing > 0 && (
+              <span className="text-amber-600 ml-1">· {missing} missing</span>
+            )}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

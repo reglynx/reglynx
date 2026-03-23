@@ -10,12 +10,14 @@ import {
   FileText,
   CheckCircle2,
   Circle,
+  ShieldCheck,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { DocumentCard } from '@/components/dashboard/DocumentCard';
+import { PropertyNotesEditor } from '@/components/dashboard/PropertyNotesEditor';
 import { PROPERTY_TYPES, DOCUMENT_TYPES } from '@/lib/constants';
 import type { Organization, Property, Document } from '@/lib/types';
 
@@ -121,7 +123,16 @@ export default async function PropertyDetailPage({
               {fullAddress}
             </div>
           </div>
-          <Badge variant="secondary">{typeLabel}</Badge>
+          <div className="flex shrink-0 items-center gap-2">
+            <Badge variant="secondary">{typeLabel}</Badge>
+            <Link
+              href={`/compliance/${property.id}`}
+              className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' gap-1.5'}
+            >
+              <ShieldCheck className="size-3.5" />
+              Compliance
+            </Link>
+          </div>
         </CardHeader>
 
         <CardContent>
@@ -217,6 +228,16 @@ export default async function PropertyDetailPage({
               })}
             </ul>
           )}
+        </CardContent>
+      </Card>
+
+      {/* ---- Internal notes (pilot tester annotations) ---- */}
+      <Card>
+        <CardContent className="py-5">
+          <PropertyNotesEditor
+            propertyId={property.id}
+            initialNotes={property.internal_notes}
+          />
         </CardContent>
       </Card>
 

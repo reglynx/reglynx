@@ -64,8 +64,8 @@ export async function POST(request: Request) {
       mode: 'subscription',
       customer: customerId,
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${origin}/dashboard?checkout=success`,
-      cancel_url: `${origin}/onboarding?checkout=cancelled`,
+      success_url: `${origin}/settings/billing?checkout=success`,
+      cancel_url: `${origin}/settings/billing`,
       subscription_data: {
         trial_period_days: 14,
         metadata: { org_id: org.id },

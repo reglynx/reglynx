@@ -4,6 +4,7 @@ import { Plus, FileText } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { DocumentCard } from '@/components/dashboard/DocumentCard';
+import { DocumentsFilterClient } from './DocumentsFilterClient';
 import type { Organization, Document } from '@/lib/types';
 
 export default async function DocumentsPage() {
@@ -45,9 +46,9 @@ export default async function DocumentsPage() {
             Manage your compliance document templates.
           </p>
         </div>
-        <Link href="/documents/generate" className={buttonVariants({ variant: "default" })}>
-            <Plus className="size-4" />
-            Generate Draft
+        <Link href="/documents/generate" className={buttonVariants({ variant: 'default' })}>
+          <Plus className="size-4" />
+          Generate Draft
         </Link>
       </div>
 
@@ -63,17 +64,16 @@ export default async function DocumentsPage() {
           <p className="mt-1 max-w-sm text-sm text-slate-500">
             Generate your first compliance document draft to get started.
           </p>
-          <Link href="/documents/generate" className={buttonVariants({ variant: "default", className: "mt-6" })}>
-              <Plus className="size-4" />
-              Generate your first draft
+          <Link
+            href="/documents/generate"
+            className={buttonVariants({ variant: 'default', className: 'mt-6' })}
+          >
+            <Plus className="size-4" />
+            Generate your first draft
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {documentList.map((doc) => (
-            <DocumentCard key={doc.id} document={doc} />
-          ))}
-        </div>
+        <DocumentsFilterClient documents={documentList} />
       )}
     </div>
   );

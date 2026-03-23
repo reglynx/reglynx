@@ -11,7 +11,7 @@ export interface Organization {
   stripe_customer_id: string | null;
   stripe_subscription_id: string | null;
   subscription_status: 'trialing' | 'active' | 'past_due' | 'canceled';
-  subscription_plan: 'starter' | 'professional' | 'enterprise';
+  subscription_plan: 'starter' | 'pilot' | 'professional' | 'enterprise';
   trial_ends_at: string | null;
   created_at: string;
   updated_at: string;
@@ -35,6 +35,7 @@ export interface Property {
   has_elevator: boolean;
   is_section8: boolean;
   is_tax_credit: boolean;
+  internal_notes: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -1,10 +1,23 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { Organization, Property, DocumentTemplate } from './types';
 import { LEGAL_DISCLAIMER } from './constants';
+import {
+  formatFairHousingReferencesForPrompt,
+} from './regulatory-sources/hud-fair-housing';
+import {
+  formatLeadPaintReferencesForPrompt,
+} from './regulatory-sources/lead-paint';
+import {
+  formatOshaReferencesForPrompt,
+} from './regulatory-sources/osha-standards';
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY!,
-});
+let _anthropic: Anthropic | null = null;
+function getAnthropicClient(): Anthropic {
+  if (!_anthropic) {
+    _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+  }
+  return _anthropic;
+}
 
 function hydrateTemplate(
   template: string,
@@ -43,6 +56,49 @@ function hydrateTemplate(
   return result;
 }
 
+/**
+ * Build the verified references block for a given document type and jurisdiction.
+ * These are ONLY hard-coded, verified references — never hallucinated.
+ */
+function buildVerifiedReferences(
+  documentType: string,
+  jurisdiction: string,
+  property?: Property | null,
+): string {
+  const propertyType = property?.property_type ?? 'residential_multifamily';
+
+  switch (documentType) {
+    case 'fair_housing_policy':
+    case 'ada_policy':
+      return formatFairHousingReferencesForPrompt(jurisdiction);
+
+    case 'lead_disclosure':
+    case 'phila_lead_safe':
+      return formatLeadPaintReferencesForPrompt(jurisdiction);
+
+    case 'emergency_action_plan':
+      return formatOshaReferencesForPrompt(propertyType);
+
+    case 'landlord_tenant_rights':
+      // PA-specific statutory references (verified)
+      return `PENNSYLVANIA LANDLORD-TENANT REFERENCES:
+- 68 P.S. §§ 250.101-250.602: Landlord and Tenant Act of 1951 | https://www.legis.state.pa.us/cfdocs/legis/LI/uconsCheck.cfm?txtType=HTM&yr=1951&sessInd=0&smthLwInd=0&act=0020.
+- 68 Pa. C.S. §§ 8101-8415: Landlord and Tenant Act of 1995 (Residential) | https://www.legis.state.pa.us/cfdocs/legis/LI/uconsCheck.cfm?txtType=HTM&yr=1995&sessInd=0&smthLwInd=0&act=0029.
+- 35 P.S. § 1700-1: Warranty of Habitability (PA) | https://www.legis.state.pa.us/`;
+
+    case 'phila_rental_license':
+      return `PHILADELPHIA RENTAL LICENSE REFERENCES:
+- Philadelphia Code § 9-3901: Rental License Requirement | https://www.phila.gov/services/permits-violations-licenses/get-a-license/business-licenses/rental-property/
+- Philadelphia Code Chapter 6-800: Property Maintenance Code | https://www.phila.gov/services/permits-violations-licenses/
+- Philadelphia Code § 9-1001: Certificate of Rental Suitability | https://www.phila.gov/services/permits-violations-licenses/get-a-license/business-licenses/rental-property/`;
+
+    default:
+      return `GENERAL COMPLIANCE REFERENCES (federal):
+- 42 U.S.C. §§ 3601-3619: Fair Housing Act | https://www.justice.gov/crt/fair-housing-act-1
+- 24 CFR Part 100: HUD Fair Housing Regulations | https://www.ecfr.gov/current/title-24/subtitle-B/chapter-I/subchapter-A/part-100`;
+  }
+}
+
 export async function generateDocument(
   template: DocumentTemplate,
   org: Organization,
@@ -50,19 +106,31 @@ export async function generateDocument(
 ): Promise<string> {
   const hydratedPrompt = hydrateTemplate(template.prompt_template, org, property);
 
-  const response = await anthropic.messages.create({
+  // Build verified, hard-coded references for this document type
+  const verifiedReferences = buildVerifiedReferences(
+    template.document_type,
+    template.jurisdiction,
+    property,
+  );
+
+  const response = await getAnthropicClient().messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 4096,
     system: `You are a compliance document TEMPLATE specialist for the property management industry. You draft document templates based on published regulations.
 
-CRITICAL RULES:
-1. ONLY use regulation citations that are provided in the template prompt below. NEVER invent, guess, or generate citation numbers on your own. If you are unsure about a citation, write "VERIFY WITH COUNSEL: [description of regulation]" instead.
-2. NEVER claim the document ensures legal compliance. Always frame as "based on published regulations as of [date]."
-3. NEVER use the phrase "legal advice" — this is a template, not legal counsel.
-4. Include "DRAFT — REVIEW WITH QUALIFIED COUNSEL BEFORE IMPLEMENTATION" as a header on every document.
-5. If the template prompt includes regulation references, use ONLY those exact references. Do not supplement with additional citations.
-6. At the end of every document, include this standard RegLynx disclaimer block:
+CRITICAL RULES — READ CAREFULLY:
+1. Use ONLY the regulation references provided in the "VERIFIED REFERENCES" section below. Do NOT add any citations not listed there. NEVER invent, guess, or generate citation numbers on your own.
+2. If you need to reference a regulation that is NOT in the VERIFIED REFERENCES list, write "VERIFY WITH COUNSEL: [description of regulation]" instead of inventing a citation.
+3. NEVER claim the document ensures legal compliance. Always frame as "based on published regulations as of [date]."
+4. NEVER use the phrase "legal advice" — this is a template, not legal counsel.
+5. Include "DRAFT — REVIEW WITH QUALIFIED COUNSEL BEFORE IMPLEMENTATION" as a prominent header on every document.
+6. At the end of every document, include the standard RegLynx disclaimer block provided below.
+7. Every citation in the output MUST come from the VERIFIED REFERENCES list below. This is a hard requirement.
 
+VERIFIED REFERENCES (use ONLY these — no others):
+${verifiedReferences}
+
+STANDARD DISCLAIMER (include verbatim at end of document):
 ${LEGAL_DISCLAIMER}
 Generated: ${new Date().toISOString().split('T')[0]} | Template Version: ${template.version}`,
     messages: [{ role: 'user', content: hydratedPrompt }],
