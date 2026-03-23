@@ -82,6 +82,7 @@ export default function NewPropertyPage() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(propertySchema) as any,
     defaultValues: {
+      city: 'Philadelphia',
       state: 'PA',
       property_type: 'residential_multifamily',
       unit_count: 1,
@@ -238,7 +239,12 @@ export default function NewPropertyPage() {
 
             {/* ---- Address ---- */}
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-slate-700">Address</h3>
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-slate-700">Address</h3>
+                <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] text-blue-700">
+                  Live data coverage: Philadelphia, PA
+                </span>
+              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="address_line1">Street Address</Label>

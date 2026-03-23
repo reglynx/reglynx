@@ -11,6 +11,7 @@ import {
   HelpCircle,
   ShieldCheck,
   BarChart3,
+  CreditCard,
 } from 'lucide-react';
 import { Logo } from '@/components/shared/Logo';
 import { FOOTER_LEGAL_LINE } from '@/lib/constants';
@@ -21,13 +22,14 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { label: 'Dashboard',  href: '/dashboard',  icon: LayoutDashboard },
-  { label: 'Properties', href: '/properties', icon: Building2 },
-  { label: 'Compliance', href: '/compliance', icon: ShieldCheck },
-  { label: 'Reports',    href: '/reports',    icon: BarChart3 },
-  { label: 'Documents',  href: '/documents',  icon: FileText },
-  { label: 'Alerts',     href: '/alerts',     icon: Bell },
-  { label: 'Settings',   href: '/settings',   icon: Settings },
+  { label: 'Dashboard',  href: '/dashboard',         icon: LayoutDashboard },
+  { label: 'Properties', href: '/properties',        icon: Building2 },
+  { label: 'Compliance', href: '/compliance',        icon: ShieldCheck },
+  { label: 'Reports',    href: '/reports',           icon: BarChart3 },
+  { label: 'Documents',  href: '/documents',         icon: FileText },
+  { label: 'Alerts',     href: '/alerts',            icon: Bell },
+  { label: 'Billing',    href: '/settings/billing',  icon: CreditCard },
+  { label: 'Settings',   href: '/settings',          icon: Settings },
 ];
 
 export function Sidebar({ org }: SidebarProps) {

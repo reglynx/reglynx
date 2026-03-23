@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { DocumentCard } from '@/components/dashboard/DocumentCard';
+import { PropertyNotesEditor } from '@/components/dashboard/PropertyNotesEditor';
 import { PROPERTY_TYPES, DOCUMENT_TYPES } from '@/lib/constants';
 import type { Organization, Property, Document } from '@/lib/types';
 
@@ -227,6 +228,16 @@ export default async function PropertyDetailPage({
               })}
             </ul>
           )}
+        </CardContent>
+      </Card>
+
+      {/* ---- Internal notes (pilot tester annotations) ---- */}
+      <Card>
+        <CardContent className="py-5">
+          <PropertyNotesEditor
+            propertyId={property.id}
+            initialNotes={property.internal_notes}
+          />
         </CardContent>
       </Card>
 

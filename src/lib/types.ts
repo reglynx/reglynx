@@ -35,6 +35,7 @@ export interface Property {
   has_elevator: boolean;
   is_section8: boolean;
   is_tax_credit: boolean;
+  internal_notes: string | null;
   created_at: string;
   updated_at: string;
 }

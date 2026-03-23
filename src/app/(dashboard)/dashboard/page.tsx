@@ -10,6 +10,7 @@ import {
   Plus,
   ExternalLink,
   Clock,
+  ShieldCheck,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { ComplianceScore } from '@/components/dashboard/ComplianceScore';
@@ -93,45 +94,59 @@ function formatAuditAction(action: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Getting Started checklist helper
+// Pilot onboarding checklist helper
 // ---------------------------------------------------------------------------
 
 interface ChecklistItem {
   id: string;
   label: string;
+  sublabel: string;
   done: boolean;
   href: string;
+  cta: string;
 }
 
-function buildGettingStartedChecklist(
+function buildPilotChecklist(
   properties: Property[],
-  documents: Document[],
-  hasReviewedDoc: boolean,
+  hasComplianceSnapshot: boolean,
+  org: Organization,
 ): ChecklistItem[] {
+  const firstPropertyId = properties[0]?.id;
+  const isUpgraded =
+    org.subscription_plan !== 'starter' || org.subscription_status === 'active';
+
   return [
     {
       id: 'add_property',
-      label: 'Add your first property',
+      label: 'Add a property',
+      sublabel: 'Enter a Philadelphia rental property address to start monitoring.',
       done: properties.length > 0,
       href: '/properties/new',
+      cta: 'Add Property',
     },
     {
-      id: 'generate_doc',
-      label: 'Generate your first compliance document',
-      done: documents.length > 0,
-      href: '/documents/generate',
+      id: 'run_compliance',
+      label: 'Run a compliance check',
+      sublabel: 'Fetch live data from Philadelphia Open Data APIs for your property.',
+      done: hasComplianceSnapshot,
+      href: firstPropertyId ? `/compliance/${firstPropertyId}` : '/compliance',
+      cta: 'Go to Compliance',
     },
     {
-      id: 'review_doc',
-      label: 'Review and download a document',
-      done: hasReviewedDoc,
-      href: '/documents',
+      id: 'view_report',
+      label: 'View your compliance report',
+      sublabel: 'See source coverage, open issues, and a printable summary.',
+      done: hasComplianceSnapshot,
+      href: firstPropertyId ? `/reports/${firstPropertyId}` : '/reports',
+      cta: 'View Report',
     },
     {
-      id: 'notifications',
-      label: 'Set up your notification preferences',
-      done: false, // Would require user metadata check
-      href: '/settings',
+      id: 'billing',
+      label: 'Set up billing',
+      sublabel: 'Upgrade to add more properties and unlock full monitoring.',
+      done: isUpgraded,
+      href: '/settings/billing',
+      cta: 'Manage Billing',
     },
   ];
 }
@@ -159,7 +174,7 @@ export default async function DashboardPage() {
   if (!org) redirect('/onboarding');
 
   // Parallel data fetches
-  const [propertiesRes, documentsRes, alertsRes, auditRes] = await Promise.all([
+  const [propertiesRes, documentsRes, alertsRes, auditRes, snapshotRes] = await Promise.all([
     supabase
       .from('properties')
       .select('*')
@@ -182,12 +197,18 @@ export default async function DashboardPage() {
       .eq('org_id', org.id)
       .order('created_at', { ascending: false })
       .limit(10),
+    supabase
+      .from('status_snapshots')
+      .select('property_id')
+      .eq('org_id', org.id)
+      .limit(1),
   ]);
 
   const properties: Property[] = propertiesRes.data ?? [];
   const documents: Document[] = documentsRes.data ?? [];
   const orgAlerts: (OrgAlert & { alert: RegulatoryAlert })[] = alertsRes.data ?? [];
   const auditEntries: AuditLogEntry[] = auditRes.data ?? [];
+  const hasComplianceSnapshot = (snapshotRes.data ?? []).length > 0;
 
   // Compute metrics
   const { score: complianceScore, totalRequired, totalCurrent } =
@@ -218,9 +239,8 @@ export default async function DashboardPage() {
   ];
 
   const recentDocuments = documents.slice(0, 5);
-  const hasReviewedDoc = documents.some((d) => d.reviewed_at !== null);
-  const gettingStarted = buildGettingStartedChecklist(properties, documents, hasReviewedDoc);
-  const allChecklistDone = gettingStarted.every((item) => item.done);
+  const pilotChecklist = buildPilotChecklist(properties, hasComplianceSnapshot, org);
+  const allChecklistDone = pilotChecklist.every((item) => item.done);
 
   return (
     <div className="space-y-8">
@@ -239,36 +259,53 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {/* Getting Started checklist (hidden once all done) */}
+      {/* Pilot access banner */}
+      <div className="flex items-start gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+        <ShieldCheck className="mt-0.5 size-4 shrink-0 text-blue-500" />
+        <p>
+          <span className="font-semibold">Pilot access — Philadelphia.</span>{' '}
+          Coverage is improving. Some compliance categories may show &ldquo;Pending Verification&rdquo; while live source data is being matched.
+          <Link href="/settings/billing" className="ml-2 underline hover:no-underline">
+            Upgrade plan
+          </Link>
+        </p>
+      </div>
+
+      {/* Pilot onboarding checklist (hidden once all done) */}
       {!allChecklistDone && (
-        <Card className="border-blue-200 bg-blue-50">
+        <Card className="border-slate-200">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold text-blue-800">
-              Getting Started
-            </CardTitle>
+            <CardTitle className="text-sm font-semibold">Get Started</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <ul className="space-y-2">
-              {gettingStarted.map((item) => (
-                <li key={item.id} className="flex items-center gap-2 text-sm">
-                  {item.done ? (
-                    <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
-                  ) : (
-                    <Circle className="size-4 shrink-0 text-blue-400" />
-                  )}
-                  {item.done ? (
-                    <span className="text-slate-500 line-through">{item.label}</span>
-                  ) : (
-                    <Link
-                      href={item.href}
-                      className="text-blue-700 hover:underline"
-                    >
-                      {item.label}
-                    </Link>
-                  )}
+            <ol className="space-y-3">
+              {pilotChecklist.map((item, i) => (
+                <li key={item.id} className="flex items-start gap-3">
+                  <div className="flex size-6 shrink-0 items-center justify-center rounded-full border-2 border-slate-200 text-[11px] font-bold text-slate-400">
+                    {item.done
+                      ? <CheckCircle2 className="size-4 text-emerald-500" />
+                      : <span>{i + 1}</span>
+                    }
+                  </div>
+                  <div className="min-w-0 flex-1 pt-0.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`text-sm font-medium ${item.done ? 'line-through text-muted-foreground' : ''}`}>
+                        {item.label}
+                      </span>
+                      {!item.done && (
+                        <Link
+                          href={item.href}
+                          className="rounded-md bg-slate-900 px-2.5 py-0.5 text-[11px] font-medium text-white hover:bg-slate-700"
+                        >
+                          {item.cta} →
+                        </Link>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">{item.sublabel}</p>
+                  </div>
                 </li>
               ))}
-            </ul>
+            </ol>
           </CardContent>
         </Card>
       )}
