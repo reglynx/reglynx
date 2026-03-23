@@ -22,6 +22,16 @@ export type OverallStatus =
 
 export type ConfidenceLevel = 'verified' | 'likely' | 'needs_review';
 
+// ── Provenance ────────────────────────────────────────────────────────────────
+// Tracks how the compliance item's current status was determined.
+// Surfaces in the UI as a trust indicator.
+
+export type Provenance =
+  | 'verified_from_source'         // Status came directly from Philadelphia Open Data API
+  | 'derived_from_rule'            // Inferred from regulation rules; no direct API source
+  | 'pending_source_verification'  // API was queried but returned no data; manual check required
+  | 'mock_demo_only';              // Placeholder demo data only — not backed by any real source
+
 // ── Item types ────────────────────────────────────────────────────────────────
 
 export type ComplianceItemType =
@@ -73,9 +83,11 @@ export interface EvaluatedItem {
   type: ComplianceItemType;
   label: string;
   status: ComplianceStatus;
-  dueDate: string | null;    // ISO date
+  dueDate: string | null;         // ISO date
   sourceRecordId: string | null;
   confidenceLevel: ConfidenceLevel;
+  provenance: Provenance;
+  sourceRetrievedAt: string | null; // ISO datetime — null for derived/mock items
   notes: string | null;
 }
 
@@ -94,6 +106,8 @@ export interface ComplianceEvaluation {
     unknown: number;
   };
   computedAt: string;
+  /** True if any items are mock_demo_only (pilot readiness indicator) */
+  hasMockData: boolean;
 }
 
 // ── Alert triggers ────────────────────────────────────────────────────────────

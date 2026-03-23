@@ -72,9 +72,11 @@ export async function POST(request: Request) {
     // ── Create org alerts for actionable items ──────────────────────────────
     const alertableItems = evaluation.items.filter(
       (i) =>
-        i.status === 'open_violation' ||
-        i.status === 'expired' ||
-        i.status === 'expiring',
+        // Never create alerts or send email for mock/demo-only items
+        i.provenance !== 'mock_demo_only' &&
+        (i.status === 'open_violation' ||
+          i.status === 'expired' ||
+          i.status === 'expiring'),
     );
 
     const propertyAddress = [property.address_line1, property.city, property.state]

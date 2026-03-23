@@ -7,10 +7,16 @@
  *   2. Normalizes the address via Atlas
  *   3. Runs all applicable Philadelphia adapters
  *   4. Stores raw source_records in the DB
- *   5. Applies rules to evaluate each compliance item
+ *   5. Applies rules to evaluate each compliance item (with provenance tagging)
  *   6. Writes compliance_items to the DB (upsert)
  *   7. Writes a status_snapshot
  *   8. Returns the ComplianceEvaluation
+ *
+ * Provenance vocabulary:
+ *   verified_from_source      — status came directly from a real Philadelphia API response
+ *   derived_from_rule         — inferred from regulation rules; no direct source data available
+ *   pending_source_verification — API was queried but returned nothing; manual check required
+ *   mock_demo_only            — placeholder demo data only
  *
  * TODO (multi-city expansion): inject city-specific adapter sets via config.
  * TODO (production): add rate limiting / retry logic around adapter calls.
@@ -22,13 +28,13 @@ import { fetchLniViolations, classifyViolations } from './adapters/lni-violation
 import {
   fetchRentalLicenses,
   evaluateRentalLicenseStatus,
-  EXPIRING_SOON_DAYS,
 } from './adapters/rental-license';
 import { fetchBuildingPermits, fetchInspectionHistory } from './adapters/property-history';
 import type {
   ComplianceEvaluation,
   ComplianceStatus,
   ConfidenceLevel,
+  Provenance,
   EvaluatedItem,
   OverallStatus,
   AdapterResult,
@@ -74,7 +80,6 @@ async function persistSourceRecords(
   propertyId: string,
   records: SourceRecord[],
 ): Promise<Map<string, string>> {
-  // Returns a map of effectiveDate → inserted record id (for linking compliance_items)
   const idMap = new Map<string, string>();
 
   for (const rec of records) {
@@ -122,6 +127,8 @@ async function upsertComplianceItem(
         due_date: item.dueDate,
         source_record_id: item.sourceRecordId,
         confidence_level: item.confidenceLevel,
+        provenance: item.provenance,
+        source_retrieved_at: item.sourceRetrievedAt,
         notes: item.notes,
         updated_at: new Date().toISOString(),
       },
@@ -136,6 +143,7 @@ export async function evaluateCompliance(
   supabase: SupabaseClient,
 ): Promise<ComplianceEvaluation> {
   const computedAt = new Date().toISOString();
+  const nowIso = computedAt;
 
   // 1. Fetch property
   const { data: property, error: propError } = await supabase
@@ -162,7 +170,6 @@ export async function evaluateCompliance(
 
   const { opaAccountNumber } = normalizedAddress;
 
-  // Persist OPA account number alias if we got one
   if (opaAccountNumber) {
     await supabase
       .from('property_aliases')
@@ -197,21 +204,34 @@ export async function evaluateCompliance(
   // ── Rule: Rental License ──────────────────────────────────────────────────
   const licenseAdapter = adapterResults.find((r) => r.adapterName === 'rental_license');
   const licenseRecords = licenseAdapter?.records ?? [];
+  const licenseAdapterSucceeded = licenseAdapter?.success ?? false;
   const licenseEval = evaluateRentalLicenseStatus(licenseRecords);
 
   let licenseStatus: ComplianceStatus;
   let licenseConfidence: ConfidenceLevel;
+  let licenseProvenance: Provenance;
   let licenseSourceId: string | null = null;
+  let licenseRetrievedAt: string | null = null;
 
-  if (licenseEval.status === 'not_found') {
+  if (!licenseAdapterSucceeded) {
+    // API call failed entirely — cannot determine status
+    licenseStatus = 'needs_review';
+    licenseConfidence = 'needs_review';
+    licenseProvenance = 'pending_source_verification';
+    licenseRetrievedAt = null;
+  } else if (licenseEval.status === 'not_found') {
+    // API succeeded but returned no matching license records
     licenseStatus = isPhiladelphia ? 'needs_review' : 'unknown';
     licenseConfidence = 'needs_review';
+    licenseProvenance = 'pending_source_verification';
+    licenseRetrievedAt = nowIso; // API was called successfully
   } else {
     licenseStatus =
       licenseEval.status === 'active' ? 'good' :
       licenseEval.status === 'expiring' ? 'expiring' : 'expired';
     licenseConfidence = 'verified';
-    // Find the record id for the most recent license
+    licenseProvenance = 'verified_from_source';
+    licenseRetrievedAt = nowIso;
     const latestRecord = licenseRecords.sort((a, b) =>
       (b.effectiveDate ?? '').localeCompare(a.effectiveDate ?? '')
     )[0];
@@ -229,9 +249,13 @@ export async function evaluateCompliance(
     dueDate: licenseEval.expirationDate,
     sourceRecordId: licenseSourceId,
     confidenceLevel: licenseConfidence,
+    provenance: licenseProvenance,
+    sourceRetrievedAt: licenseRetrievedAt,
     notes:
-      licenseEval.status === 'not_found'
-        ? 'No rental license found in Philadelphia L&I data. Verify manually.'
+      !licenseAdapterSucceeded
+        ? 'L&I license data could not be retrieved (API error). Verify manually at https://li.phila.gov.'
+        : licenseEval.status === 'not_found'
+        ? 'No rental license found in Philadelphia Business License data. If you hold a valid license, verify at https://li.phila.gov.'
         : licenseEval.status === 'expiring'
         ? `Expires in ${licenseEval.daysUntilExpiration} days (${licenseEval.expirationDate}). Renew at the L&I Self-Service portal.`
         : licenseEval.status === 'expired'
@@ -245,11 +269,26 @@ export async function evaluateCompliance(
 
   // ── Rule: L&I Violations ──────────────────────────────────────────────────
   const violationsAdapter = adapterResults.find((r) => r.adapterName === 'lni_violations');
+  const violationsAdapterSucceeded = violationsAdapter?.success ?? false;
   const violationRecords = violationsAdapter?.records ?? [];
   const { openCount, mostRecentOpenDate, mostRecentOpenDescription } =
     classifyViolations(violationRecords);
 
-  if (openCount > 0) {
+  if (!violationsAdapterSucceeded && isPhiladelphia) {
+    // Adapter failed — surface a pending item so the user knows we couldn't check
+    evaluatedItems.push({
+      type: 'open_violation' as ComplianceItemType,
+      label: 'L&I Violations Status',
+      status: 'needs_review',
+      dueDate: null,
+      sourceRecordId: null,
+      confidenceLevel: 'needs_review',
+      provenance: 'pending_source_verification',
+      sourceRetrievedAt: null,
+      notes:
+        'L&I violations data could not be retrieved (API error). Verify open violations manually at https://li.phila.gov.',
+    });
+  } else if (openCount > 0) {
     const vSourceId = mostRecentOpenDate
       ? (recordIdMap.get(`philly_lni_violations:${mostRecentOpenDate}`) ?? null)
       : null;
@@ -261,18 +300,14 @@ export async function evaluateCompliance(
       dueDate: null,
       sourceRecordId: vSourceId,
       confidenceLevel: 'verified',
+      provenance: 'verified_from_source',
+      sourceRetrievedAt: nowIso,
       notes: `${openCount} open violation${openCount > 1 ? 's' : ''}. Most recent: ${mostRecentOpenDescription ?? 'See L&I records'} (${mostRecentOpenDate}).`,
     });
   }
 
   // ── Rule: Lead Safe Certification (Philadelphia pre-1978 units) ───────────
-  if (
-    isPhiladelphia &&
-    property.year_built &&
-    property.year_built < 1978
-  ) {
-    // Philadelphia requires lead-safe or lead-free cert before any child under 6 moves in.
-    // This is NOT in open data — must be verified manually.
+  if (isPhiladelphia && property.year_built && property.year_built < 1978) {
     evaluatedItems.push({
       type: 'lead_safe_cert' as ComplianceItemType,
       label: 'Philadelphia Lead Safe Certification',
@@ -280,6 +315,8 @@ export async function evaluateCompliance(
       dueDate: null,
       sourceRecordId: null,
       confidenceLevel: 'needs_review',
+      provenance: 'derived_from_rule',
+      sourceRetrievedAt: null,
       notes:
         `Pre-1978 property. Philadelphia Bill No. 200725 requires lead-safe or lead-free ` +
         `certification before any child under 6 occupies a unit. ` +
@@ -289,7 +326,6 @@ export async function evaluateCompliance(
   }
 
   // ── Rule: Certificate of Rental Suitability ───────────────────────────────
-  // Required per tenancy — not tracked in public data. Always needs_review.
   if (isPhiladelphia) {
     evaluatedItems.push({
       type: 'cert_of_rental_suitability' as ComplianceItemType,
@@ -298,6 +334,8 @@ export async function evaluateCompliance(
       dueDate: null,
       sourceRecordId: null,
       confidenceLevel: 'needs_review',
+      provenance: 'derived_from_rule',
+      sourceRetrievedAt: null,
       notes:
         'Required for each new tenancy in Philadelphia. Obtain from the L&I Self-Service portal ' +
         '(https://li.phila.gov) before executing a new lease. Not tracked in public data — verify manually.',
@@ -306,11 +344,11 @@ export async function evaluateCompliance(
 
   // ── Mock / demo data injection ────────────────────────────────────────────
   // Ensures compliance dashboard is never empty while real Philly ingestion
-  // ramps up. Items are marked confidence='likely' and clearly annotated.
+  // ramps up. Items are clearly marked mock_demo_only and visually isolated in the UI.
   // TODO: remove once all adapters reliably return live data.
-  const MOCK_TRIGGER = 2; // inject when fewer than N data-backed items
+  const MOCK_TRIGGER = 2;
   const dataBackedCount = evaluatedItems.filter(
-    (i) => i.confidenceLevel === 'verified',
+    (i) => i.provenance === 'verified_from_source',
   ).length;
 
   if (dataBackedCount < MOCK_TRIGGER) {
@@ -328,10 +366,12 @@ export async function evaluateCompliance(
         dueDate: in45Days,
         sourceRecordId: null,
         confidenceLevel: 'likely',
+        provenance: 'mock_demo_only',
+        sourceRetrievedAt: null,
         notes:
-          `Rental license expires in ~45 days (${in45Days}). ` +
-          'Source: Mock Data — verify current status at Philadelphia L&I Self-Service (https://li.phila.gov). ' +
-          'Run a new evaluation after verifying.',
+          `Demo placeholder: license shown as expiring in ~45 days (${in45Days}). ` +
+          'Verify actual status at Philadelphia L&I (https://li.phila.gov). ' +
+          'This item will be replaced by real source data once the API returns results.',
       });
     }
 
@@ -343,10 +383,12 @@ export async function evaluateCompliance(
         dueDate: null,
         sourceRecordId: null,
         confidenceLevel: 'likely',
+        provenance: 'mock_demo_only',
+        sourceRetrievedAt: null,
         notes:
-          'Source: Mock Data — L&I code violation on file. ' +
-          'Verify and resolve through the Philadelphia L&I Self-Service portal (https://li.phila.gov). ' +
-          'This item will clear once real data is confirmed.',
+          'Demo placeholder: simulated open violation. ' +
+          'Verify actual violations at Philadelphia L&I (https://li.phila.gov). ' +
+          'This item will be replaced by real source data once the API returns results.',
       });
     }
   }
@@ -354,6 +396,7 @@ export async function evaluateCompliance(
   // 6. Compute overall status
   const overallStatus = deriveOverallStatus(evaluatedItems);
   const itemSummary = buildItemSummary(evaluatedItems);
+  const hasMockData = evaluatedItems.some((i) => i.provenance === 'mock_demo_only');
 
   // 7. Upsert compliance items to DB
   await Promise.all(
@@ -374,6 +417,7 @@ export async function evaluateCompliance(
     items: evaluatedItems,
     itemSummary,
     computedAt,
+    hasMockData,
   };
 }
 
@@ -382,6 +426,7 @@ export async function evaluateCompliance(
 /**
  * Compare new evaluation against the previous snapshot to detect changes
  * that should trigger user alerts.
+ * NOTE: mock_demo_only items are excluded — no alerts for demo data.
  */
 export function detectAlertChanges(
   newEval: ComplianceEvaluation,
@@ -391,9 +436,11 @@ export function detectAlertChanges(
   const prevMap = new Map(previousItems.map((i) => [i.type, i.status]));
 
   for (const item of newEval.items) {
+    // Never alert on mock/demo data
+    if (item.provenance === 'mock_demo_only') continue;
+
     const prev = prevMap.get(item.type);
 
-    // New open violation appeared
     if (item.status === 'open_violation' && prev !== 'open_violation') {
       alerts.push({
         type: 'new_violation',
@@ -402,7 +449,6 @@ export function detectAlertChanges(
       });
     }
 
-    // License just expired
     if (item.status === 'expired' && prev !== 'expired') {
       alerts.push({
         type: 'expired',
@@ -411,7 +457,6 @@ export function detectAlertChanges(
       });
     }
 
-    // License entering expiring window
     if (item.status === 'expiring' && prev === 'good') {
       alerts.push({
         type: 'expiring_soon',
