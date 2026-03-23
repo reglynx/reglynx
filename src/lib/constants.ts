@@ -162,3 +162,19 @@ Ramesses Management & Contracting LLC | Philadelphia, PA`;
 
 export const FOOTER_LEGAL_LINE =
   'RegLynx is not a law firm and does not provide legal advice. All generated document templates should be reviewed by qualified counsel before implementation.';
+
+
+
+export const DOCUMENT_TYPE_NAMES: Record<string, string> = {
+  fair_housing_policy: 'Fair Housing Policy',
+  lead_disclosure: 'Lead-Based Paint Disclosure',
+  emergency_action_plan: 'Emergency Action Plan',
+  ada_policy: 'ADA Compliance Policy',
+  landlord_tenant_rights: 'PA Landlord-Tenant Rights Disclosure',
+  phila_rental_license: 'Philadelphia Rental License Checklist',
+  phila_lead_safe: 'Philadelphia Lead Safe Certification',
+};
+
+export function getDocumentTypeName(docType: string): string {
+  return DOCUMENT_TYPE_NAMES[docType] || docType;
+}
