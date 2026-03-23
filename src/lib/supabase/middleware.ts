@@ -90,10 +90,18 @@ export async function updateSession(request: NextRequest) {
 
   // Redirect already-authenticated users away from login / signup pages
   if (user && (pathname.startsWith('/login') || pathname.startsWith('/signup'))) {
-    const next = request.nextUrl.searchParams.get('next') ?? '/dashboard';
-    logger.debug('auth', 'Authenticated user on auth page → redirect', { pathname, next });
+    const rawNext = request.nextUrl.searchParams.get('next') ?? '/dashboard';
+    // Guard against open-redirect: next must be a relative path that is not another auth page
+    const safeNext =
+      rawNext.startsWith('/') &&
+      !rawNext.startsWith('//') &&
+      !rawNext.startsWith('/login') &&
+      !rawNext.startsWith('/signup')
+        ? rawNext
+        : '/dashboard';
+    logger.debug('auth', 'Authenticated user on auth page → redirect', { pathname, next: safeNext });
     const url = request.nextUrl.clone();
-    url.pathname = next.startsWith('/') ? next : '/dashboard';
+    url.pathname = safeNext;
     url.search = '';
     return NextResponse.redirect(url);
   }

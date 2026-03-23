@@ -22,6 +22,8 @@ interface AdapterInfo {
   matchMethod: string | null;
   matchState: string | null;
   queryInput: string | null;
+  sourceEndpoint: string | null;
+  noMatchReason: string | null;
   classification: Record<string, unknown>;
   sample: Record<string, unknown>[];
 }
@@ -70,12 +72,27 @@ function AdapterCard({ name, info }: { name: string; info: AdapterInfo }) {
         </div>
       </div>
 
-      {/* Match method + query input */}
+      {/* Match method + query input + endpoint */}
       {(info.matchMethod || info.queryInput) && (
         <div className="rounded bg-slate-50 border px-3 py-2 text-[11px] font-mono text-slate-600 space-y-0.5">
           {info.matchMethod && <div><span className="text-slate-400">method:</span> {info.matchMethod}</div>}
           {info.queryInput && <div><span className="text-slate-400">query:</span> {info.queryInput}</div>}
+          {info.sourceEndpoint && (
+            <div className="truncate">
+              <span className="text-slate-400">endpoint:</span>{' '}
+              <a href={info.sourceEndpoint} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                {info.sourceEndpoint.slice(0, 80)}{info.sourceEndpoint.length > 80 ? '…' : ''}
+              </a>
+            </div>
+          )}
         </div>
+      )}
+
+      {/* No-match reason */}
+      {info.noMatchReason && (
+        <p className="rounded bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800">
+          {info.noMatchReason}
+        </p>
       )}
 
       {info.error && (

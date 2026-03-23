@@ -132,6 +132,26 @@ export async function POST(req: Request) {
 
   const coverage = buildCoverageMatrix('__validate__', syntheticItems, syntheticSourceRecords);
 
+  // Produce a human-readable reason for each no-match case
+  function noMatchReason(
+    result: typeof violationsResult,
+    resolvedOpaNum: string | null,
+  ): string | null {
+    if (result.success && result.matchState === 'no_match_found') {
+      if (resolvedOpaNum && result.matchMethod === 'opa_account') {
+        return `Queried by OPA account ${resolvedOpaNum} — no records in this dataset for this parcel.`;
+      }
+      if (result.matchMethod === 'normalized_address') {
+        return `Queried by normalized address — no records matched "${result.queryInput}". Try OPA lookup.`;
+      }
+      return `Queried by address prefix "${result.queryInput}" — no records matched. Address-fallback queries have lower confidence.`;
+    }
+    if (!result.success && result.matchState === 'query_failed') {
+      return `API request failed: ${result.error ?? 'unknown error'}`;
+    }
+    return null;
+  }
+
   return NextResponse.json({
     address,
     normalizedAddress: resolvedNormalizedAddress,
@@ -143,8 +163,10 @@ export async function POST(req: Request) {
         matchMethod: violationsResult.matchMethod,
         matchState: violationsResult.matchState,
         queryInput: violationsResult.queryInput,
+        sourceEndpoint: violationsResult.sourceEndpoint ?? null,
         error: violationsResult.error ?? null,
         recordCount: violationsResult.records.length,
+        noMatchReason: noMatchReason(violationsResult, resolvedOpa),
         classification: violations,
         sample: violationsResult.records.slice(0, 5).map((r) => r.rawData),
       },
@@ -153,8 +175,10 @@ export async function POST(req: Request) {
         matchMethod: licenseResult.matchMethod,
         matchState: licenseResult.matchState,
         queryInput: licenseResult.queryInput,
+        sourceEndpoint: licenseResult.sourceEndpoint ?? null,
         error: licenseResult.error ?? null,
         recordCount: licenseResult.records.length,
+        noMatchReason: noMatchReason(licenseResult, resolvedOpa),
         classification: licenseStatus,
         sample: licenseResult.records.slice(0, 5).map((r) => r.rawData),
       },

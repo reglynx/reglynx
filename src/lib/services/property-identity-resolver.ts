@@ -82,7 +82,8 @@ export function normalizeAddress(addr: RawPropertyAddress): string {
   const line = [addr.addressLine1, addr.addressLine2]
     .filter(Boolean)
     .join(' ');
-  const full = `${line}, ${addr.city}, ${addr.state} ${addr.zip}`;
+  const zipPart = addr.zip ? ` ${addr.zip}` : '';
+  const full = `${line}, ${addr.city}, ${addr.state}${zipPart}`;
   return full
     .replace(/[.,#]+/g, ' ')
     .replace(/\s+/g, ' ')

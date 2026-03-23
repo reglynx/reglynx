@@ -96,6 +96,18 @@ export default async function AdminDebugPage() {
     providerCounts[p] = (providerCounts[p] ?? 0) + 1;
   }
 
+  // Subscription / webhook health (proxy: orgs with active Stripe subscriptions)
+  const { data: subscribedOrgs, count: subscribedCount } = await serviceClient
+    .from('organizations')
+    .select('id, subscription_status, subscription_plan, stripe_customer_id, trial_ends_at', { count: 'exact' })
+    .in('subscription_status', ['active', 'trialing', 'past_due'])
+    .order('id', { ascending: false })
+    .limit(10);
+
+  const { count: totalOrgs } = await serviceClient
+    .from('organizations')
+    .select('id', { count: 'exact', head: true });
+
   // Stripe health
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   const stripeLiveMode = stripeKey?.startsWith('sk_live_');
@@ -270,6 +282,63 @@ export default async function AdminDebugPage() {
               Stripe is in test mode. Switch to a <code>sk_live_</code> key before going live.
             </p>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Subscription / webhook health */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <CheckCircle2 className="size-4" />
+            Subscription Health
+            <span className="ml-auto text-xs font-normal text-muted-foreground">
+              {subscribedCount ?? 0} active / {totalOrgs ?? 0} total orgs
+            </span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {(subscribedOrgs ?? []).length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No active subscriptions. If webhooks are configured, subscriptions will appear here after checkout.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b text-left text-[11px] text-muted-foreground">
+                    <th className="pb-2 pr-4 font-medium">Org ID</th>
+                    <th className="pb-2 pr-4 font-medium">Plan</th>
+                    <th className="pb-2 pr-4 font-medium">Status</th>
+                    <th className="pb-2 font-medium">Trial ends</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(subscribedOrgs ?? []).map((org) => (
+                    <tr key={org.id} className="border-b last:border-0">
+                      <td className="py-1.5 pr-4 font-mono text-muted-foreground truncate max-w-32">{org.id.slice(0, 8)}…</td>
+                      <td className="py-1.5 pr-4 capitalize">{org.subscription_plan ?? 'starter'}</td>
+                      <td className="py-1.5 pr-4">
+                        <span className={`rounded border px-1.5 py-0.5 font-medium text-[10px] ${
+                          org.subscription_status === 'active'   ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                          org.subscription_status === 'trialing' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                                   'bg-red-50 text-red-700 border-red-200'
+                        }`}>{org.subscription_status}</span>
+                      </td>
+                      <td className="py-1.5 text-muted-foreground">
+                        {org.trial_ends_at
+                          ? new Date(org.trial_ends_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Active subscriptions confirm that Stripe checkout and webhook delivery are working.
+            If a user completed checkout but doesn&apos;t appear here, check the <code>STRIPE_WEBHOOK_SECRET</code> in your environment and verify the webhook endpoint is registered in the Stripe dashboard.
+          </p>
         </CardContent>
       </Card>
 
