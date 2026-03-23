@@ -1,13 +1,21 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+/**
+ * Refreshes the Supabase session cookie on every request and enforces
+ * route-level auth guards.
+ *
+ * IMPORTANT: The response object returned here must be the one used downstream.
+ * Do not create a new NextResponse after this function — it would drop the
+ * updated Set-Cookie headers and break session persistence.
+ */
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // If Supabase is not configured, allow all requests through
+  // If Supabase is not configured, allow all requests through (local dev without env)
   if (
     !supabaseUrl ||
     !supabaseAnonKey ||
@@ -17,57 +25,79 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
-  try {
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
+  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
       },
-    });
+      setAll(cookiesToSet) {
+        // Step 1: write cookies onto the mutated request (for downstream Server Components)
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+        // Step 2: create a new response that carries the same mutated request headers
+        supabaseResponse = NextResponse.next({ request });
 
-    // Public paths that don't require authentication
-    const publicPaths = ['/', '/login', '/signup', '/auth', '/api', '/terms', '/privacy', '/onboarding'];
-    const isPublicPath = publicPaths.some(
-      (path) =>
-        request.nextUrl.pathname === path ||
-        request.nextUrl.pathname.startsWith(path + '/')
+        // Step 3: write Set-Cookie onto the response so the browser stores the refreshed token
+        cookiesToSet.forEach(({ name, value, options }) =>
+          supabaseResponse.cookies.set(name, value, options),
+        );
+      },
+    },
+  });
+
+  // IMPORTANT: always call getUser() here to trigger the token refresh cycle.
+  // Never use getSession() in middleware — it reads from the cookie only and
+  // does not verify the JWT signature with Supabase's servers.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { pathname } = request.nextUrl;
+
+  // Paths that are always public (no auth required)
+  const publicPaths = [
+    '/',
+    '/login',
+    '/signup',
+    '/auth',
+    '/terms',
+    '/privacy',
+    '/onboarding',
+  ];
+
+  // API routes handle their own auth — middleware only needs to refresh the
+  // session cookie; it does not redirect API calls.
+  const isApiRoute = pathname.startsWith('/api/');
+
+  const isPublicPath =
+    isApiRoute ||
+    publicPaths.some(
+      (p) => pathname === p || pathname.startsWith(p + '/'),
     );
 
-    // Redirect unauthenticated users from protected routes to login
-    if (!user && !isPublicPath) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/login';
-      return NextResponse.redirect(url);
-    }
-
-    // Redirect authenticated users from auth pages to dashboard
-    if (
-      user &&
-      (request.nextUrl.pathname.startsWith('/login') ||
-        request.nextUrl.pathname.startsWith('/signup'))
-    ) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/dashboard';
-      return NextResponse.redirect(url);
-    }
-  } catch {
-    // If Supabase auth fails, allow the request through
-    return supabaseResponse;
+  // Redirect unauthenticated users away from protected pages
+  if (!user && !isPublicPath) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    // Preserve the intended destination so we can redirect back after login
+    url.searchParams.set('next', pathname);
+    const redirect = NextResponse.redirect(url);
+    // Auth redirects must not be cached
+    redirect.headers.set('Cache-Control', 'no-store');
+    return redirect;
   }
 
+  // Redirect already-authenticated users away from login / signup pages
+  if (user && (pathname.startsWith('/login') || pathname.startsWith('/signup'))) {
+    const url = request.nextUrl.clone();
+    // Honor ?next= param if present; fall back to dashboard
+    const next = request.nextUrl.searchParams.get('next') ?? '/dashboard';
+    url.pathname = next.startsWith('/') ? next : '/dashboard';
+    url.search = '';
+    return NextResponse.redirect(url);
+  }
+
+  // Return the supabaseResponse — it carries the refreshed Set-Cookie headers.
+  // Do NOT return a different response object here or the cookie will be lost.
   return supabaseResponse;
 }

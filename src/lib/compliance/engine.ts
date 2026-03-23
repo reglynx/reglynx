@@ -23,13 +23,16 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { buildNormalizedAddress } from './adapters/atlas';
 import { fetchLniViolations, classifyViolations } from './adapters/lni-violations';
 import {
   fetchRentalLicenses,
   evaluateRentalLicenseStatus,
 } from './adapters/rental-license';
 import { fetchBuildingPermits, fetchInspectionHistory } from './adapters/property-history';
+import {
+  resolvePropertyIdentity,
+  persistPropertyIdentity,
+} from '@/lib/services/property-identity-resolver';
 import type {
   ComplianceEvaluation,
   ComplianceStatus,
@@ -160,23 +163,38 @@ export async function evaluateCompliance(
     .filter(Boolean)
     .join(' ');
 
-  // 2. Normalize address (Philadelphia AIS)
-  const normalizedAddress = await buildNormalizedAddress(
-    addressRaw,
-    property.city,
-    property.state,
-    property.zip,
-  );
+  // 2. Resolve property identity (OPA number, geocoords, canonical address)
+  //    Use cached OPA number from a prior resolution if available.
+  let opaAccountNumber: string | undefined;
 
-  const { opaAccountNumber } = normalizedAddress;
+  if (property.local_parcel_id && property.provider_name?.startsWith('phila_ais')) {
+    // Already resolved via AIS — skip the API call
+    opaAccountNumber = property.local_parcel_id;
+  } else {
+    const rawAddr = {
+      addressLine1: property.address_line1,
+      addressLine2: property.address_line2,
+      city: property.city,
+      state: property.state,
+      zip: property.zip,
+    };
 
-  if (opaAccountNumber) {
-    await supabase
-      .from('property_aliases')
-      .upsert(
-        { property_id: propertyId, external_source_id: opaAccountNumber, source_name: 'opa' },
-        { onConflict: 'property_id,source_name', ignoreDuplicates: false },
-      );
+    const identity = await resolvePropertyIdentity(rawAddr);
+
+    // Persist resolved identity fields onto the property row
+    await persistPropertyIdentity(supabase, propertyId, identity);
+
+    opaAccountNumber = identity.localParcelId ?? undefined;
+
+    // Also store in property_aliases for cross-reference queries
+    if (opaAccountNumber) {
+      await supabase
+        .from('property_aliases')
+        .upsert(
+          { property_id: propertyId, external_source_id: opaAccountNumber, source_name: 'opa' },
+          { onConflict: 'property_id,source_name', ignoreDuplicates: false },
+        );
+    }
   }
 
   const isPhiladelphia =

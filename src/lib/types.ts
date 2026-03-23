@@ -36,6 +36,19 @@ export interface Property {
   is_section8: boolean;
   is_tax_credit: boolean;
   internal_notes: string | null;
+  // Identity resolution fields (populated by property-identity-resolver)
+  normalized_address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  jurisdiction_city: string | null;
+  jurisdiction_county: string | null;
+  jurisdiction_state: string | null;
+  national_property_id: string | null;
+  local_parcel_id: string | null;
+  local_tax_id: string | null;
+  provider_name: string | null;
+  provider_confidence: number | null;
+  identity_resolved_at: string | null;
   created_at: string;
   updated_at: string;
 }
