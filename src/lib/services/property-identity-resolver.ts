@@ -28,7 +28,7 @@ export interface RawPropertyAddress {
   addressLine2?: string | null;
   city: string;
   state: string;
-  zip: string;
+  zip?: string | null;
 }
 
 export interface PropertyIdentity {

@@ -17,6 +17,8 @@ import {
   evaluateRentalLicenseStatus,
 } from '@/lib/compliance/adapters/rental-license';
 import { buildCoverageMatrix } from '@/lib/compliance/coverage';
+import { resolvePhiladelphiaIdentity } from '@/lib/services/philadelphia-property-resolver';
+import { normalizeAddress } from '@/lib/services/property-identity-resolver';
 
 function getAdminEmails(): Set<string> {
   const raw = process.env.ADMIN_EMAILS ?? '';
@@ -56,12 +58,41 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'address is required' }, { status: 400 });
   }
 
-  const opaAccountNumber = (body.opaAccountNumber ?? '').trim() || undefined;
+  const opaAccountNumberInput = (body.opaAccountNumber ?? '').trim() || undefined;
+
+  // Run Philadelphia AIS resolution to obtain canonical address and OPA account number.
+  // This mirrors what the compliance engine does, ensuring the validate tool
+  // tests the exact same resolution path as production.
+  const rawAddr = { addressLine1: address, city: 'Philadelphia', state: 'PA' };
+  const normalizedAddressStr = normalizeAddress(rawAddr);
+
+  let resolvedOpa = opaAccountNumberInput ?? null;
+  let resolvedNormalizedAddress: string | null = normalizedAddressStr;
+  let aisResolution: Record<string, unknown> | null = null;
+
+  if (!resolvedOpa) {
+    const identity = await resolvePhiladelphiaIdentity(rawAddr);
+    if (identity) {
+      resolvedOpa = identity.localParcelId;
+      resolvedNormalizedAddress = identity.normalizedAddress;
+      aisResolution = {
+        normalizedAddress: identity.normalizedAddress,
+        localParcelId: identity.localParcelId,
+        localTaxId: identity.localTaxId,
+        providerName: identity.providerName,
+        providerConfidence: identity.providerConfidence,
+        latitude: identity.latitude,
+        longitude: identity.longitude,
+      };
+    }
+  } else {
+    aisResolution = { note: 'OPA number supplied manually — AIS lookup skipped', opaAccountNumber: resolvedOpa };
+  }
 
   const queryInput = {
     addressRaw: address,
-    normalizedAddress: null,
-    opaAccountNumber: opaAccountNumber ?? null,
+    normalizedAddress: resolvedNormalizedAddress,
+    opaAccountNumber: resolvedOpa,
     city: 'Philadelphia',
     state: 'PA',
   };
@@ -103,7 +134,9 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     address,
-    opaAccountNumber: opaAccountNumber ?? null,
+    normalizedAddress: resolvedNormalizedAddress,
+    opaAccountNumber: resolvedOpa ?? null,
+    aisResolution,
     adapters: {
       lni_violations: {
         success: violationsResult.success,

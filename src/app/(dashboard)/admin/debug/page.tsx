@@ -13,7 +13,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
-import { Activity, CheckCircle2, AlertTriangle, XCircle, Database, Settings, ArrowLeft } from 'lucide-react';
+import { Activity, CheckCircle2, AlertTriangle, XCircle, Database, Settings, ArrowLeft, CreditCard } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 function getAdminEmails(): Set<string> {
@@ -95,6 +95,16 @@ export default async function AdminDebugPage() {
     const p = r.provider_name ?? 'not_resolved';
     providerCounts[p] = (providerCounts[p] ?? 0) + 1;
   }
+
+  // Stripe health
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  const stripeLiveMode = stripeKey?.startsWith('sk_live_');
+  const stripeChecks = [
+    { key: 'STRIPE_SECRET_KEY',                      value: process.env.STRIPE_SECRET_KEY,                      label: 'Secret key' },
+    { key: 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',     value: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,     label: 'Publishable key' },
+    { key: 'STRIPE_WEBHOOK_SECRET',                  value: process.env.STRIPE_WEBHOOK_SECRET,                  label: 'Webhook secret' },
+    { key: 'STRIPE_PRICE_ID_PILOT',                  value: process.env.STRIPE_PRICE_ID_PILOT || process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_PILOT, label: 'Pilot price ID' },
+  ];
 
   // Env / config health
   const envChecks = [
@@ -214,6 +224,54 @@ export default async function AdminDebugPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Stripe billing health */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <CreditCard className="size-4" />
+            Stripe Billing Health
+            {stripeKey && (
+              <span className={`ml-auto rounded border px-1.5 py-0.5 text-[10px] font-medium ${
+                stripeLiveMode ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+              }`}>
+                {stripeLiveMode ? 'LIVE MODE' : 'TEST MODE'}
+              </span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {stripeChecks.map(({ key, value, label }) => {
+              const isSet = Boolean(value);
+              return (
+                <div key={key} className={`flex items-center gap-3 rounded-lg border p-3 ${isSet ? 'bg-slate-50' : 'bg-red-50 border-red-200'}`}>
+                  {isSet
+                    ? <CheckCircle2 className="size-4 shrink-0 text-emerald-500" />
+                    : <XCircle className="size-4 shrink-0 text-red-400" />
+                  }
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-slate-700">{label}</p>
+                    <p className="font-mono text-[10px] text-muted-foreground">
+                      {isSet ? `${value!.slice(0, 12)}…` : 'NOT SET'}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {!stripeKey && (
+            <p className="mt-3 text-xs text-red-700">
+              STRIPE_SECRET_KEY is missing. Billing flows will return 503. Set it in your environment variables.
+            </p>
+          )}
+          {stripeKey && !stripeLiveMode && (
+            <p className="mt-3 text-xs text-amber-700">
+              Stripe is in test mode. Switch to a <code>sk_live_</code> key before going live.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Property resolution table */}
       <Card>

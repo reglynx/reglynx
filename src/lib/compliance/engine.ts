@@ -397,57 +397,6 @@ export async function evaluateCompliance(
     });
   }
 
-  // ── Mock / demo data injection ────────────────────────────────────────────
-  // Ensures compliance dashboard is never empty while real Philly ingestion
-  // ramps up. Items are clearly marked mock_demo_only and visually isolated in the UI.
-  // TODO: remove once all adapters reliably return live data.
-  const MOCK_TRIGGER = 2;
-  const dataBackedCount = evaluatedItems.filter(
-    (i) => i.provenance === 'verified_from_source',
-  ).length;
-
-  if (dataBackedCount < MOCK_TRIGGER) {
-    const today = new Date();
-    const in45Days = new Date(today.getTime() + 45 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split('T')[0];
-    const existing = new Set(evaluatedItems.map((i) => i.type));
-
-    if (!existing.has('rental_license')) {
-      evaluatedItems.push({
-        type: 'rental_license' as ComplianceItemType,
-        label: 'Philadelphia Rental License',
-        status: 'expiring',
-        dueDate: in45Days,
-        sourceRecordId: null,
-        confidenceLevel: 'likely',
-        provenance: 'mock_demo_only',
-        sourceRetrievedAt: null,
-        notes:
-          `Demo placeholder: license shown as expiring in ~45 days (${in45Days}). ` +
-          'Verify actual status at Philadelphia L&I (https://li.phila.gov). ' +
-          'This item will be replaced by real source data once the API returns results.',
-      });
-    }
-
-    if (!existing.has('open_violation')) {
-      evaluatedItems.push({
-        type: 'open_violation' as ComplianceItemType,
-        label: 'Open L&I Code Violation',
-        status: 'open_violation',
-        dueDate: null,
-        sourceRecordId: null,
-        confidenceLevel: 'likely',
-        provenance: 'mock_demo_only',
-        sourceRetrievedAt: null,
-        notes:
-          'Demo placeholder: simulated open violation. ' +
-          'Verify actual violations at Philadelphia L&I (https://li.phila.gov). ' +
-          'This item will be replaced by real source data once the API returns results.',
-      });
-    }
-  }
-
   // 7. Compute overall status
   const overallStatus = deriveOverallStatus(evaluatedItems);
   const itemSummary = buildItemSummary(evaluatedItems);
