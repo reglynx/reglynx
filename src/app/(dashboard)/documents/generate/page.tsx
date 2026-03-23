@@ -1,23 +1,26 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { createClient } from '@/lib/supabase/client';
-import { DOCUMENT_TYPES, JURISDICTIONS } from '@/lib/constants';
+import { DOCUMENT_TYPES, JURISDICTIONS, getDocumentTypeName } from '@/lib/constants';
 import type { Property } from '@/lib/types';
 
-export default function GenerateDocumentPage() {
+function GenerateDocumentForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const preselectedPropertyId = searchParams.get('property_id');
 
-  const [documentType, setDocumentType] = useState('');
-  const [propertyId, setPropertyId] = useState(preselectedPropertyId ?? '');
-  const [jurisdiction, setJurisdiction] = useState('');
+  const preselectedDocType = searchParams.get('doc_type') || '';
+  const preselectedJurisdiction = searchParams.get('jurisdiction') || '';
+  const preselectedPropertyId = searchParams.get('property_id') || '';
+
+  const [documentType, setDocumentType] = useState(preselectedDocType);
+  const [propertyId, setPropertyId] = useState(preselectedPropertyId);
+  const [jurisdiction, setJurisdiction] = useState(preselectedJurisdiction);
   const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +33,6 @@ export default function GenerateDocumentPage() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-
       if (!user) return;
 
       const { data: org } = await supabase
@@ -50,17 +52,16 @@ export default function GenerateDocumentPage() {
       setProperties(data ?? []);
       setFetchingProperties(false);
     }
-
     fetchProperties();
   }, []);
 
-  // Auto-suggest jurisdiction when property is selected
+  // Auto-suggest jurisdiction when property is selected (only if no preselected jurisdiction)
   useEffect(() => {
     if (!propertyId) return;
+    if (preselectedJurisdiction) return; // Don't override preselected
     const property = properties.find((p) => p.id === propertyId);
     if (!property) return;
 
-    // Auto-suggest jurisdiction based on property location
     if (property.city === 'Philadelphia' && property.state === 'PA') {
       setJurisdiction('Philadelphia_PA');
     } else if (property.state === 'PA') {
@@ -68,7 +69,7 @@ export default function GenerateDocumentPage() {
     } else {
       setJurisdiction('federal');
     }
-  }, [propertyId, properties]);
+  }, [propertyId, properties, preselectedJurisdiction]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -125,6 +126,15 @@ export default function GenerateDocumentPage() {
         </p>
       </div>
 
+      {preselectedDocType && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+          <p className="text-emerald-800 text-sm font-medium">
+            \u2713 Ready to generate your <strong>{getDocumentTypeName(preselectedDocType)}</strong> draft.
+            Select a property below to get started.
+          </p>
+        </div>
+      )}
+
       <Card>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -176,7 +186,7 @@ export default function GenerateDocumentPage() {
                 </option>
                 {properties.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} — {p.city}, {p.state}
+                    {p.name} \u2014 {p.city}, {p.state}
                   </option>
                 ))}
               </select>
@@ -220,5 +230,13 @@ export default function GenerateDocumentPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function GenerateDocumentPage() {
+  return (
+    <Suspense fallback={<div />}>
+      <GenerateDocumentForm />
+    </Suspense>
   );
 }
