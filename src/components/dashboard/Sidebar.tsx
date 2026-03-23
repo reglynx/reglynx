@@ -79,6 +79,11 @@ export function Sidebar({ org }: SidebarProps) {
         <p className="mt-3 text-[10px] leading-tight text-slate-500">
           {FOOTER_LEGAL_LINE}
         </p>
+        {process.env.NEXT_PUBLIC_GIT_COMMIT && (
+          <p className="mt-1.5 font-mono text-[10px] text-slate-600">
+            Build: {process.env.NEXT_PUBLIC_GIT_COMMIT.slice(0, 7)}
+          </p>
+        )}
       </div>
     </aside>
   );
