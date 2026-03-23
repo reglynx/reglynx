@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/dashboard/Sidebar';
 import { Topbar } from '@/components/dashboard/Topbar';
+import { IntentRedirect } from '@/components/shared/IntentRedirect';
 import type { Organization } from '@/lib/types';
 
 export default async function DashboardLayout({
@@ -33,6 +34,9 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden">
+      {/* Intent redirect — checks sessionStorage after onboarding */}
+      <IntentRedirect />
+
       {/* Fixed sidebar */}
       <Sidebar org={org} />
 
