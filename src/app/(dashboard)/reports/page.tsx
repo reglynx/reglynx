@@ -102,7 +102,11 @@ export default async function ReportsPage() {
                         {snap ? (
                           <>
                             {overallIcon(snap.overall_status)}
-                            <span className="capitalize">{snap.overall_status.replace(/_/g, ' ')}</span>
+                            <span className="capitalize">{
+                            snap.overall_status === 'compliant'
+                              ? 'No active issues found'
+                              : snap.overall_status.replace(/_/g, ' ')
+                          }</span>
                             <span className="text-slate-300">·</span>
                             <span>{lastEvaluated}</span>
                           </>

@@ -40,7 +40,7 @@ export interface RentalLicenseRecord {
   licensecodenumber?: string;
   licensetype?: string;          // 'RENTAL', 'RENTAL MULTI-FAMILY', etc.
   licensestatusdate?: string;
-  licensestatus?: string;        // 'Active', 'Inactive', 'Expired'
+  licensestatus?: string;        // 'Active', 'Inactive', 'Expired', 'Pending'
   expirationdate?: string;
   initialissuedate?: string;
   opa_account_num?: string;
@@ -53,6 +53,47 @@ function buildHeaders(): HeadersInit {
   const token = getAppToken();
   if (token) headers['X-App-Token'] = token;
   return headers;
+}
+
+/**
+ * Normalise a raw address string for a SODA LIKE query.
+ * Returns "STREETNUM STREETNAME" prefix (first 3 tokens after cleaning).
+ * Example: "1234 N. Broad St, Philadelphia, PA 19130" → "1234 N BROAD"
+ */
+function normalizeAddressForQuery(raw: string): string {
+  const cleaned = raw
+    .toUpperCase()
+    .replace(/[.,#]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // Keep 3 tokens (number + first 2 street words) for a tighter prefix match
+  return cleaned.split(' ').slice(0, 3).join(' ');
+}
+
+/**
+ * Parse an expiration date string safely. Returns null on any parse failure.
+ */
+function parseExpirationDate(raw: string | undefined): Date | null {
+  if (!raw) return null;
+  try {
+    // Strip time component if present (e.g. "2025-12-31T00:00:00.000")
+    const dateStr = raw.split('T')[0];
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    return d;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Return true if a license record has an active status per the `licensestatus` field.
+ * We check the explicit status field first; expiration date is secondary.
+ */
+function isActiveStatus(raw: RentalLicenseRecord): boolean {
+  const s = (raw.licensestatus ?? '').trim().toUpperCase();
+  // Accept 'ACTIVE' and 'PENDING' as live statuses
+  return s === 'ACTIVE' || s === 'PENDING';
 }
 
 /**
@@ -69,10 +110,8 @@ export async function fetchRentalLicenses(
     if (opaAccountNumber) {
       query = `opa_account_num='${opaAccountNumber}' AND (licensetype='RENTAL' OR licensetype like 'RENTAL %')`;
     } else {
-      const addr = addressRaw.toUpperCase().replace(/,/g, '').trim();
-      const parts = addr.split(' ');
-      // Match street number + first word of street name
-      query = `address like '${parts[0]} ${parts[1]}%' AND (licensetype='RENTAL' OR licensetype like 'RENTAL %')`;
+      const prefix = normalizeAddressForQuery(addressRaw);
+      query = `upper(address) like '${prefix}%' AND (licensetype='RENTAL' OR licensetype like 'RENTAL %')`;
     }
 
     const url = `${DATASET_URL}?$where=${encodeURIComponent(query)}&$limit=10&$order=expirationdate DESC`;
@@ -93,7 +132,7 @@ export async function fetchRentalLicenses(
       sourceUrl: r.licensenumber
         ? `https://li.phila.gov/license-and-inspection/licensing/business-licenses/?id=${r.licensenumber}`
         : SOURCE_PAGE,
-      rawData: r as Record<string, unknown>,
+      rawData: r as unknown as Record<string, unknown>,
       effectiveDate: r.expirationdate?.split('T')[0] ?? null,
       retrievedAt: new Date().toISOString(),
     }));
@@ -116,7 +155,12 @@ export async function fetchRentalLicenses(
 
 /**
  * Get the current compliance status of a rental license.
- * Returns the most recent active (or most recently expired) license status.
+ *
+ * Strategy:
+ *   1. Prefer records whose `licensestatus` field is 'Active' or 'Pending'.
+ *   2. Among those, pick the one with the latest expiration date.
+ *   3. If no active records exist, fall back to the most recently expired record
+ *      so the operator sees history rather than "not_found".
  */
 export function evaluateRentalLicenseStatus(records: SourceRecord[]): {
   status: 'active' | 'expired' | 'expiring' | 'not_found';
@@ -128,24 +172,31 @@ export function evaluateRentalLicenseStatus(records: SourceRecord[]): {
     return { status: 'not_found', expirationDate: null, licenseNumber: null, daysUntilExpiration: null };
   }
 
-  // Sort by expiration date descending — most recent first
-  const sorted = [...records].sort((a, b) => {
-    if (!a.effectiveDate) return 1;
-    if (!b.effectiveDate) return -1;
-    return b.effectiveDate.localeCompare(a.effectiveDate);
+  // Partition into active vs historical
+  const activeRecords = records.filter((r) => isActiveStatus(r.rawData as unknown as RentalLicenseRecord));
+  const pool = activeRecords.length > 0 ? activeRecords : records;
+
+  // Sort pool by expiration date descending — most recent first
+  const sorted = [...pool].sort((a, b) => {
+    const da = parseExpirationDate(a.effectiveDate ?? undefined);
+    const db = parseExpirationDate(b.effectiveDate ?? undefined);
+    if (!da) return 1;
+    if (!db) return -1;
+    return db.getTime() - da.getTime();
   });
 
-  const latest = sorted[0];
-  const raw = latest.rawData as RentalLicenseRecord;
-  const expirationDate = latest.effectiveDate;
+  const best = sorted[0];
+  const raw = best.rawData as unknown as RentalLicenseRecord;
+  const expirationDate = best.effectiveDate ?? null;
   const licenseNumber = raw.licensenumber ?? null;
 
-  if (!expirationDate) {
+  const expiry = parseExpirationDate(expirationDate ?? undefined);
+  if (!expiry) {
+    // Expiration date is missing or unparseable — can't determine status
     return { status: 'not_found', expirationDate: null, licenseNumber, daysUntilExpiration: null };
   }
 
   const now = new Date();
-  const expiry = new Date(expirationDate);
   const daysUntilExpiration = Math.ceil((expiry.getTime() - now.getTime()) / 86_400_000);
 
   if (daysUntilExpiration < 0) {

@@ -29,7 +29,7 @@ export interface LniViolationRecord {
   casenumber: string;
   casetype?: string;
   casepriority?: string;
-  casestatus?: string;       // 'OPEN' | 'CLOSED'
+  casestatus?: string;       // 'OPEN' | 'CLOSED' | 'IN VIOLATION' | varies
   violationdate?: string;
   violationresolutiondate?: string;
   address?: string;
@@ -48,6 +48,25 @@ function buildHeaders(): HeadersInit {
 }
 
 /**
+ * Normalise a raw address string into a form safe for SODA LIKE queries.
+ * Returns the street number + up to three words of the street name.
+ * Example: "1234 N. Broad St, Philadelphia, PA" → "1234 N BROAD ST"
+ */
+function normalizeAddressForQuery(raw: string): string {
+  // Strip punctuation (commas, periods, hashes), uppercase, collapse spaces
+  const cleaned = raw
+    .toUpperCase()
+    .replace(/[.,#]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Take the first 4 tokens (number + up to 3 street words) for the LIKE match.
+  // This is conservative: "1234 N BROAD" matches better than "1234 N BROAD ST PHILADELPHIA PA".
+  const tokens = cleaned.split(' ').slice(0, 4);
+  return tokens.join(' ');
+}
+
+/**
  * Fetch L&I violations for a Philadelphia property.
  * Queries by OPA account number when available; falls back to address substring match.
  */
@@ -62,9 +81,9 @@ export async function fetchLniViolations(
       // Prefer OPA account number — most reliable match
       query = `opa_account_num='${opaAccountNumber}'`;
     } else {
-      // Fall back to address substring match (normalized to uppercase)
-      const normalizedAddr = addressRaw.toUpperCase().replace(/,/g, '').trim();
-      query = `address like '%${normalizedAddr.split(' ')[0]} ${normalizedAddr.split(' ').slice(1, 3).join(' ')}%'`;
+      // Fall back to address prefix match (normalised to uppercase, punctuation stripped)
+      const prefix = normalizeAddressForQuery(addressRaw);
+      query = `upper(address) like '${prefix}%'`;
     }
 
     const url = `${DATASET_URL}?$where=${encodeURIComponent(query)}&$limit=50&$order=violationdate DESC`;
@@ -105,7 +124,26 @@ export async function fetchLniViolations(
 }
 
 /**
- * Classify violations as open or closed and extract the most recent status.
+ * Determine whether a violation case status indicates an active / open violation.
+ *
+ * Known values from the Philly dataset:
+ *   'OPEN'         — explicitly open
+ *   'IN VIOLATION' — synonymous with open (used by some case types)
+ *   'CLOSED'       — resolved
+ *   'VIOLATION'    — shorthand seen in some records; treat as open
+ *
+ * Anything not clearly 'CLOSED' / 'RESOLVED' / 'COMPLIANT' is treated as open
+ * to avoid false negatives.
+ */
+function isOpenStatus(rawStatus: string | undefined): boolean {
+  const s = (rawStatus ?? '').toUpperCase().trim();
+  if (!s) return false; // unknown — do not count as open
+  const closedTerms = ['CLOSED', 'RESOLVED', 'COMPLIANT', 'CANCELLED', 'WITHDRAWN'];
+  return !closedTerms.some((term) => s === term || s.startsWith(term));
+}
+
+/**
+ * Classify violations as open or closed and extract the most recent open case details.
  */
 export function classifyViolations(records: SourceRecord[]): {
   openCount: number;
@@ -120,9 +158,8 @@ export function classifyViolations(records: SourceRecord[]): {
 
   for (const rec of records) {
     const raw = rec.rawData as unknown as LniViolationRecord;
-    const isOpen = (raw.casestatus ?? '').toUpperCase() === 'OPEN';
 
-    if (isOpen) {
+    if (isOpenStatus(raw.casestatus)) {
       openCount++;
       if (!mostRecentOpenDate || (rec.effectiveDate && rec.effectiveDate > mostRecentOpenDate)) {
         mostRecentOpenDate = rec.effectiveDate;
