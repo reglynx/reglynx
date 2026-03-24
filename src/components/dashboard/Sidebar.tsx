@@ -79,6 +79,9 @@ export function Sidebar({ org }: SidebarProps) {
         <p className="mt-3 text-[10px] leading-tight text-slate-500">
           {FOOTER_LEGAL_LINE}
         </p>
+        <p className="mt-2 text-[9px] text-slate-600">
+          RegLynx v1.0.0
+        </p>
       </div>
     </aside>
   );

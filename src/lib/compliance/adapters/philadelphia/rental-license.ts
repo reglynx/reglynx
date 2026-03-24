@@ -1,16 +1,16 @@
 import type { ComplianceAdapter } from '../../adapter-interface';
 import type { Property, ComplianceResult, ComplianceRecord } from '@/lib/types';
+import { sanitizeForCarto, normalizePhillyAddress, queryPhillyCarto, CARTO_ENDPOINT } from './carto-utils';
 
 /**
  * Philadelphia Rental License adapter.
- * Source: OpenDataPhilly / Philadelphia Business Licenses dataset
- * API: https://phl.carto.com/api/v2/sql (public CARTO endpoint)
+ * Source: OpenDataPhilly — Business Licenses dataset (public CARTO API)
  */
 export class PhiladelphiaRentalLicenseAdapter implements ComplianceAdapter {
   readonly name = 'philadelphia_rental_license';
   readonly jurisdiction = 'Philadelphia_PA';
   readonly description = 'Philadelphia Department of Licenses & Inspections — Rental Licenses';
-  readonly sourceEndpoint = 'https://phl.carto.com/api/v2/sql';
+  readonly sourceEndpoint = CARTO_ENDPOINT;
 
   async check(property: Property): Promise<ComplianceResult> {
     const baseResult: ComplianceResult = {
@@ -25,10 +25,6 @@ export class PhiladelphiaRentalLicenseAdapter implements ComplianceAdapter {
       checkedAt: new Date().toISOString(),
     };
 
-    if (property.local_parcel_id) {
-      baseResult.matchMethod = 'local_id';
-    }
-
     try {
       const records = await this.fetchLicenses(property);
 
@@ -37,44 +33,36 @@ export class PhiladelphiaRentalLicenseAdapter implements ComplianceAdapter {
         baseResult.recordCount = records.length;
         baseResult.records = records;
       } else {
-        baseResult.matchState = 'no_match';
-        baseResult.noMatchReason = 'No rental license records found for this address';
+        baseResult.noMatchReason = 'No rental license records found for this address. The property may not have an active rental license on file.';
       }
     } catch (err) {
       console.error(`[${this.name}] check error:`, err);
-      baseResult.matchState = 'no_match';
-      baseResult.noMatchReason = 'Failed to query rental license API';
+      baseResult.noMatchReason = 'Unable to query rental license data source at this time.';
     }
 
     return baseResult;
   }
 
   private async fetchLicenses(property: Property): Promise<ComplianceRecord[]> {
-    const address = property.address_line1?.trim();
+    const address = normalizePhillyAddress(property.address_line1);
     if (!address) return [];
 
-    // Query Philadelphia business licenses for rental activity licenses
+    const safeAddr = sanitizeForCarto(address);
+
     const query = `
       SELECT licensenumber, licensetype, licensestatus,
              legalname, initialissuedate, expirationdate,
              address, opa_account_num
       FROM li_business_licenses
-      WHERE UPPER(address) LIKE UPPER('%${this.escapeSql(address.replace(/\s+(apt|suite|unit|ste|#)\s*\S*/i, '').trim())}%')
+      WHERE UPPER(address) LIKE '%${safeAddr}%'
         AND UPPER(licensetype) LIKE '%RENTAL%'
       ORDER BY expirationdate DESC
       LIMIT 20
     `;
 
-    const url = new URL(this.sourceEndpoint);
-    url.searchParams.set('q', query);
+    const rows = await queryPhillyCarto(query);
 
-    const res = await fetch(url.toString());
-    if (!res.ok) return [];
-
-    const data = await res.json();
-    const rows = data?.rows || [];
-
-    return rows.map((row: Record<string, unknown>) => ({
+    return rows.map((row) => ({
       id: String(row.licensenumber || ''),
       type: 'rental_license',
       status: String(row.licensestatus || 'unknown'),
@@ -83,9 +71,5 @@ export class PhiladelphiaRentalLicenseAdapter implements ComplianceAdapter {
       sourceUrl: null,
       rawData: row,
     }));
-  }
-
-  private escapeSql(str: string): string {
-    return str.replace(/'/g, "''");
   }
 }

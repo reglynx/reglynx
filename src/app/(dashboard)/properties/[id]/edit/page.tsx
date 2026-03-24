@@ -172,8 +172,7 @@ export default function EditPropertyPage() {
         <CardHeader>
           <CardTitle>Edit Property</CardTitle>
           <CardDescription>
-            Update property details. Changes to address fields will reset
-            normalization and identity resolution.
+            Update property details. Address changes may require re-verification.
           </CardDescription>
         </CardHeader>
         <CardContent>

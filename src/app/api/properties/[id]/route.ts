@@ -50,7 +50,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
     }
 
-    // Build input_address if address fields changed
+    // If address fields changed, rebuild input_address and clear stale resolution data
     if (updates.address_line1 || updates.city || updates.state || updates.zip) {
       const addr = [
         updates.address_line1 || body.address_line1,
@@ -59,6 +59,18 @@ export async function PATCH(
         updates.zip || body.zip,
       ].filter(Boolean).join(', ');
       updates.input_address = addr;
+      // Clear stale normalization/identity data so it can be re-resolved
+      updates.normalized_address = null;
+      updates.latitude = null;
+      updates.longitude = null;
+      updates.address_provider = null;
+      updates.address_confidence = null;
+      updates.national_property_id = null;
+      updates.local_parcel_id = null;
+      updates.local_tax_id = null;
+      updates.identity_provider = null;
+      updates.identity_confidence = null;
+      updates.identity_resolved_at = null;
     }
 
     const { data: updated, error: updateError } = await supabase

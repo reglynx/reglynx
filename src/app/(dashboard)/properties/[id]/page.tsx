@@ -24,6 +24,7 @@ import { DocumentCard } from '@/components/dashboard/DocumentCard';
 import { PropertyNotesEditor } from '@/components/dashboard/PropertyNotesEditor';
 import { PROPERTY_TYPES, DOCUMENT_TYPES, COVERAGE_MESSAGES } from '@/lib/constants';
 import { getCoverage } from '@/lib/jurisdiction/coverage-registry';
+import { ComplianceCheckButton } from '@/components/compliance/ComplianceCheckButton';
 import type { Organization, Property, Document } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
@@ -221,36 +222,17 @@ export default async function PropertyDetailPage({
             </div>
           </div>
 
-          {/* Resolution info (when available) */}
-          {(property.normalized_address || property.local_parcel_id) && (
-            <div className="mt-3 rounded-lg border bg-slate-50 p-3 text-xs text-muted-foreground">
-              <div className="mb-1 flex items-center gap-1 font-medium text-slate-700">
-                <Database className="size-3" />
+          {/* Verified address info */}
+          {property.normalized_address && (
+            <div className="mt-3 rounded-lg border bg-slate-50 p-3 text-sm text-slate-600">
+              <div className="mb-1 flex items-center gap-1.5 font-medium text-slate-700">
+                <Database className="size-3.5" />
                 Verified Address
               </div>
-              {property.normalized_address && (
-                <p>Normalized: {property.normalized_address}</p>
-              )}
+              <p>{property.normalized_address}</p>
               {property.local_parcel_id && (
-                <p>Parcel ID: {property.local_parcel_id}</p>
-              )}
-              {property.local_tax_id && (
-                <p>Tax ID: {property.local_tax_id}</p>
-              )}
-              {property.address_provider && (
-                <p>
-                  Address provider: {property.address_provider}
-                  {property.address_confidence
-                    ? ` (${Math.round(property.address_confidence * 100)}% confidence)`
-                    : ''}
-                </p>
-              )}
-              {property.identity_provider && (
-                <p>
-                  Identity provider: {property.identity_provider}
-                  {property.identity_confidence
-                    ? ` (${Math.round(property.identity_confidence * 100)}% confidence)`
-                    : ''}
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Parcel ID: {property.local_parcel_id}
                 </p>
               )}
             </div>
@@ -316,6 +298,14 @@ export default async function PropertyDetailPage({
           />
         </CardContent>
       </Card>
+
+      {/* ---- Compliance source check (Philadelphia only) ---- */}
+      <ComplianceCheckButton
+        propertyId={property.id}
+        isPhiladelphia={
+          property.city?.toLowerCase() === 'philadelphia' && property.state === 'PA'
+        }
+      />
 
       {/* ---- Documents list ---- */}
       <section className="space-y-4">

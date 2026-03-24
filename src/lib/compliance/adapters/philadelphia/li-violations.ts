@@ -1,16 +1,16 @@
 import type { ComplianceAdapter } from '../../adapter-interface';
 import type { Property, ComplianceResult, ComplianceRecord } from '@/lib/types';
+import { sanitizeForCarto, normalizePhillyAddress, queryPhillyCarto, CARTO_ENDPOINT } from './carto-utils';
 
 /**
  * Philadelphia L&I Violations adapter.
- * Source: OpenDataPhilly / Philadelphia L&I Violations dataset
- * API: https://phl.carto.com/api/v2/sql (public CARTO endpoint)
+ * Source: OpenDataPhilly — L&I Violations dataset (public CARTO API)
  */
 export class PhiladelphiaLIViolationsAdapter implements ComplianceAdapter {
   readonly name = 'philadelphia_li_violations';
   readonly jurisdiction = 'Philadelphia_PA';
   readonly description = 'Philadelphia Department of Licenses & Inspections — Violations';
-  readonly sourceEndpoint = 'https://phl.carto.com/api/v2/sql';
+  readonly sourceEndpoint = CARTO_ENDPOINT;
 
   async check(property: Property): Promise<ComplianceResult> {
     const baseResult: ComplianceResult = {
@@ -25,11 +25,6 @@ export class PhiladelphiaLIViolationsAdapter implements ComplianceAdapter {
       checkedAt: new Date().toISOString(),
     };
 
-    // Determine match strategy
-    if (property.local_parcel_id) {
-      baseResult.matchMethod = 'local_id';
-    }
-
     try {
       const records = await this.fetchViolations(property);
 
@@ -38,44 +33,35 @@ export class PhiladelphiaLIViolationsAdapter implements ComplianceAdapter {
         baseResult.recordCount = records.length;
         baseResult.records = records;
       } else {
-        baseResult.matchState = 'no_match';
-        baseResult.noMatchReason = 'No L&I violation records found for this address';
+        baseResult.noMatchReason = 'No L&I violation records found for this address. This may indicate a clean record or an address format mismatch.';
       }
     } catch (err) {
       console.error(`[${this.name}] check error:`, err);
-      baseResult.matchState = 'no_match';
-      baseResult.noMatchReason = 'Failed to query L&I violations API';
+      baseResult.noMatchReason = 'Unable to query L&I violations data source at this time.';
     }
 
     return baseResult;
   }
 
   private async fetchViolations(property: Property): Promise<ComplianceRecord[]> {
-    // Normalize address for CARTO query
-    const address = this.normalizeAddressForQuery(property);
+    const address = normalizePhillyAddress(property.address_line1);
     if (!address) return [];
 
-    // Query Philadelphia L&I violations via CARTO SQL API
+    const safeAddr = sanitizeForCarto(address);
+
     const query = `
       SELECT violationid, violationdate, violationcodetitle,
              violationstatus, casegroupnumber, casetypetitle,
              opa_account_num, address
       FROM violations
-      WHERE UPPER(address) LIKE UPPER('%${this.escapeSql(address)}%')
+      WHERE UPPER(address) LIKE '%${safeAddr}%'
       ORDER BY violationdate DESC
       LIMIT 50
     `;
 
-    const url = new URL(this.sourceEndpoint);
-    url.searchParams.set('q', query);
+    const rows = await queryPhillyCarto(query);
 
-    const res = await fetch(url.toString());
-    if (!res.ok) return [];
-
-    const data = await res.json();
-    const rows = data?.rows || [];
-
-    return rows.map((row: Record<string, unknown>) => ({
+    return rows.map((row) => ({
       id: String(row.violationid || ''),
       type: 'li_violation',
       status: String(row.violationstatus || 'unknown'),
@@ -84,20 +70,5 @@ export class PhiladelphiaLIViolationsAdapter implements ComplianceAdapter {
       sourceUrl: null,
       rawData: row,
     }));
-  }
-
-  private normalizeAddressForQuery(property: Property): string | null {
-    // Use address_line1 as the primary match field
-    const addr = property.address_line1?.trim();
-    if (!addr) return null;
-
-    // Remove apartment/unit suffixes for broader matching
-    return addr
-      .replace(/\s+(apt|suite|unit|ste|#)\s*\S*/i, '')
-      .trim();
-  }
-
-  private escapeSql(str: string): string {
-    return str.replace(/'/g, "''");
   }
 }
