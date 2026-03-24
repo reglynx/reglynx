@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Logo } from '@/components/shared/Logo';
 
 export const metadata = {
-  title: 'Privacy Policy — RegLynx',
+  title: 'Privacy Policy â RegLynx',
 };
 
 export default function PrivacyPage() {
@@ -27,7 +27,7 @@ export default function PrivacyPage() {
               1. Introduction
             </h2>
             <p className="mt-2">
-              Ramesses Management &amp; Contracting LLC (&quot;Company&quot;,
+              RCCHM Consulting Group (&quot;Company&quot;,
               &quot;we&quot;, &quot;us&quot;) operates RegLynx
               (&quot;Service&quot;). This Privacy Policy explains how we
               collect, use, disclose, and safeguard your information when you
@@ -76,21 +76,21 @@ export default function PrivacyPage() {
             </p>
             <ul className="mt-1 list-disc space-y-1 pl-5">
               <li>
-                <strong>Stripe</strong> — for payment processing
+                <strong>Stripe</strong> â for payment processing
               </li>
               <li>
-                <strong>Supabase</strong> — for database and authentication
+                <strong>Supabase</strong> â for database and authentication
                 services
               </li>
               <li>
-                <strong>Anthropic</strong> — for AI-powered document generation
+                <strong>Anthropic</strong> â for AI-powered document generation
                 (property data is sent to generate templates)
               </li>
               <li>
-                <strong>Resend</strong> — for transactional email delivery
+                <strong>Resend</strong> â for transactional email delivery
               </li>
               <li>
-                <strong>Vercel</strong> — for application hosting
+                <strong>Vercel</strong> â for application hosting
               </li>
             </ul>
           </section>
@@ -183,7 +183,7 @@ export default function PrivacyPage() {
               </a>
             </p>
             <p className="mt-1">
-              Ramesses Management &amp; Contracting LLC
+              RCCHM Consulting Group
               <br />
               1700 Market St. Suite 1005, Philadelphia, PA 19103
             </p>
