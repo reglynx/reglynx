@@ -51,7 +51,7 @@ export class PhiladelphiaPermitsAdapter implements ComplianceAdapter {
 
     const query = `
       SELECT permitnumber, permittype, status,
-             permitdescription, permitissuedate, completed_date,
+             permitdescription, permitissuedate, permitcompleteddate,
              address, opa_account_num
       FROM permits
       WHERE UPPER(address) LIKE '%${safeAddr}%'

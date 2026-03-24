@@ -50,8 +50,8 @@ export class PhiladelphiaLIViolationsAdapter implements ComplianceAdapter {
     const safeAddr = sanitizeForCarto(address);
 
     const query = `
-      SELECT violationid, violationdate, violationcodetitle,
-             violationstatus, casegroupnumber, casetypetitle,
+      SELECT violationnumber, violationdate, violationcodetitle,
+             violationstatus, casenumber, casetype,
              opa_account_num, address
       FROM violations
       WHERE UPPER(address) LIKE '%${safeAddr}%'
@@ -62,7 +62,7 @@ export class PhiladelphiaLIViolationsAdapter implements ComplianceAdapter {
     const rows = await queryPhillyCarto(query);
 
     return rows.map((row) => ({
-      id: String(row.violationid || ''),
+      id: String(row.violationnumber || ''),
       type: 'li_violation',
       status: String(row.violationstatus || 'unknown'),
       description: String(row.violationcodetitle || 'L&I Violation'),

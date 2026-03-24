@@ -50,10 +50,10 @@ export class PhiladelphiaRentalLicenseAdapter implements ComplianceAdapter {
     const safeAddr = sanitizeForCarto(address);
 
     const query = `
-      SELECT licensenumber, licensetype, licensestatus,
+      SELECT licensenum, licensetype, licensestatus,
              legalname, initialissuedate, expirationdate,
-             address, opa_account_num
-      FROM li_business_licenses
+             address, opa_account_num, numberofunits
+      FROM business_licenses
       WHERE UPPER(address) LIKE '%${safeAddr}%'
         AND UPPER(licensetype) LIKE '%RENTAL%'
       ORDER BY expirationdate DESC
@@ -63,10 +63,10 @@ export class PhiladelphiaRentalLicenseAdapter implements ComplianceAdapter {
     const rows = await queryPhillyCarto(query);
 
     return rows.map((row) => ({
-      id: String(row.licensenumber || ''),
+      id: String(row.licensenum || ''),
       type: 'rental_license',
       status: String(row.licensestatus || 'unknown'),
-      description: `Rental License ${row.licensenumber || ''} — ${row.licensestatus || 'unknown'}`,
+      description: `Rental License ${row.licensenum || ''} — ${row.licensestatus || 'unknown'}`,
       date: row.expirationdate ? String(row.expirationdate) : null,
       sourceUrl: null,
       rawData: row,
