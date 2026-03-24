@@ -39,7 +39,7 @@ export function Sidebar({ org }: SidebarProps) {
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[240px] flex-col bg-[#0f172a] text-white md:flex">
       {/* Logo + org name */}
       <div className="flex flex-col gap-1 px-5 pt-5 pb-4">
-        <Logo size="sm" className="[&_span]:text-white [&_span.text-\\[\\#0f172a\\]]:text-white" />
+        <Logo size="sm" className="*:text-white" />
         <p className="mt-1 truncate text-xs text-slate-400">{org.name}</p>
       </div>
 
@@ -79,11 +79,9 @@ export function Sidebar({ org }: SidebarProps) {
         <p className="mt-3 text-[10px] leading-tight text-slate-500">
           {FOOTER_LEGAL_LINE}
         </p>
-        {process.env.NEXT_PUBLIC_GIT_COMMIT && (
-          <p className="mt-1.5 font-mono text-[10px] text-slate-600">
-            Build: {process.env.NEXT_PUBLIC_GIT_COMMIT.slice(0, 7)}
-          </p>
-        )}
+        <p className="mt-2 text-[9px] text-slate-600">
+          RegLynx v1.0.0
+        </p>
       </div>
     </aside>
   );

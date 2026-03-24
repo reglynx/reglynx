@@ -165,9 +165,92 @@ export const ENTITY_TYPES = [
   'Other',
 ] as const;
 
-export const US_STATES = [
+// ---------------------------------------------------------------------------
+// U.S. States — Contiguous 48 only (Phase 1 scope)
+// ---------------------------------------------------------------------------
+
+export const CONTIGUOUS_US_STATES = [
+  { code: 'AL', name: 'Alabama' },
+  { code: 'AZ', name: 'Arizona' },
+  { code: 'AR', name: 'Arkansas' },
+  { code: 'CA', name: 'California' },
+  { code: 'CO', name: 'Colorado' },
+  { code: 'CT', name: 'Connecticut' },
+  { code: 'DE', name: 'Delaware' },
+  { code: 'FL', name: 'Florida' },
+  { code: 'GA', name: 'Georgia' },
+  { code: 'ID', name: 'Idaho' },
+  { code: 'IL', name: 'Illinois' },
+  { code: 'IN', name: 'Indiana' },
+  { code: 'IA', name: 'Iowa' },
+  { code: 'KS', name: 'Kansas' },
+  { code: 'KY', name: 'Kentucky' },
+  { code: 'LA', name: 'Louisiana' },
+  { code: 'ME', name: 'Maine' },
+  { code: 'MD', name: 'Maryland' },
+  { code: 'MA', name: 'Massachusetts' },
+  { code: 'MI', name: 'Michigan' },
+  { code: 'MN', name: 'Minnesota' },
+  { code: 'MS', name: 'Mississippi' },
+  { code: 'MO', name: 'Missouri' },
+  { code: 'MT', name: 'Montana' },
+  { code: 'NE', name: 'Nebraska' },
+  { code: 'NV', name: 'Nevada' },
+  { code: 'NH', name: 'New Hampshire' },
+  { code: 'NJ', name: 'New Jersey' },
+  { code: 'NM', name: 'New Mexico' },
+  { code: 'NY', name: 'New York' },
+  { code: 'NC', name: 'North Carolina' },
+  { code: 'ND', name: 'North Dakota' },
+  { code: 'OH', name: 'Ohio' },
+  { code: 'OK', name: 'Oklahoma' },
+  { code: 'OR', name: 'Oregon' },
   { code: 'PA', name: 'Pennsylvania' },
+  { code: 'RI', name: 'Rhode Island' },
+  { code: 'SC', name: 'South Carolina' },
+  { code: 'SD', name: 'South Dakota' },
+  { code: 'TN', name: 'Tennessee' },
+  { code: 'TX', name: 'Texas' },
+  { code: 'UT', name: 'Utah' },
+  { code: 'VT', name: 'Vermont' },
+  { code: 'VA', name: 'Virginia' },
+  { code: 'WA', name: 'Washington' },
+  { code: 'WV', name: 'West Virginia' },
+  { code: 'WI', name: 'Wisconsin' },
+  { code: 'WY', name: 'Wyoming' },
 ] as const;
+
+/** @deprecated Use CONTIGUOUS_US_STATES instead */
+export const US_STATES = CONTIGUOUS_US_STATES;
+
+export const EXCLUDED_US_STATES = [
+  { code: 'AK', name: 'Alaska' },
+  { code: 'HI', name: 'Hawaii' },
+] as const;
+
+export const CONTIGUOUS_STATE_CODES: string[] = CONTIGUOUS_US_STATES.map((s) => s.code);
+
+export function isStateSupported(stateCode: string): boolean {
+  return CONTIGUOUS_STATE_CODES.includes(stateCode.toUpperCase());
+}
+
+export function getStateName(stateCode: string): string | undefined {
+  return CONTIGUOUS_US_STATES.find(
+    (s) => s.code === stateCode.toUpperCase()
+  )?.name;
+}
+
+// ---------------------------------------------------------------------------
+// Coverage status messages (enterprise-grade language)
+// ---------------------------------------------------------------------------
+
+export const COVERAGE_MESSAGES = {
+  active: 'Coverage active',
+  partial: 'Partial coverage available',
+  pending: 'Coverage pending — property intake available',
+  unsupported: 'Coverage is not yet active in this jurisdiction',
+  excluded: 'This jurisdiction is not included in the current service area',
+} as const;
 
 export const LEGAL_DISCLAIMER = `DRAFT — REVIEW WITH QUALIFIED COUNSEL BEFORE IMPLEMENTATION
 

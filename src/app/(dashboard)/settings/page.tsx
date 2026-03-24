@@ -8,6 +8,9 @@ import {
   ExternalLink,
   Bell,
   Download,
+  CheckCircle2,
+  XCircle,
+  Shield,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import {
@@ -52,6 +55,15 @@ export default async function SettingsPage() {
 
   const planInfo = SUBSCRIPTION_PLANS[org.subscription_plan] || SUBSCRIPTION_PLANS.starter;
   const statusInfo = STATUS_BADGE_MAP[org.subscription_status] || STATUS_BADGE_MAP.active;
+
+  // Stripe health checks
+  const stripeMode = process.env.STRIPE_SECRET_KEY?.startsWith('sk_live_') ? 'Live' : 'Test';
+  const hasPriceIds = !!(
+    process.env.STRIPE_PRICE_ID_STARTER &&
+    process.env.STRIPE_PRICE_ID_PROFESSIONAL &&
+    process.env.STRIPE_PRICE_ID_ENTERPRISE
+  );
+  const hasWebhookSecret = !!process.env.STRIPE_WEBHOOK_SECRET;
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
@@ -137,6 +149,49 @@ export default async function SettingsPage() {
             Manage Billing
             <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
           </Link>
+        </CardContent>
+      </Card>
+
+      {/* Billing Health (admin visibility) */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100">
+              <Shield className="h-5 w-5 text-slate-600" />
+            </div>
+            <div>
+              <CardTitle>Platform Status</CardTitle>
+              <CardDescription>Billing and integration health</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2 text-sm">
+            <div className="flex items-center gap-2">
+              {stripeMode === 'Live' ? (
+                <CheckCircle2 className="size-4 text-emerald-500" />
+              ) : (
+                <XCircle className="size-4 text-amber-500" />
+              )}
+              <span>Stripe mode: <span className="font-medium">{stripeMode}</span></span>
+            </div>
+            <div className="flex items-center gap-2">
+              {hasPriceIds ? (
+                <CheckCircle2 className="size-4 text-emerald-500" />
+              ) : (
+                <XCircle className="size-4 text-red-500" />
+              )}
+              <span>Price IDs configured: <span className="font-medium">{hasPriceIds ? 'Yes' : 'No'}</span></span>
+            </div>
+            <div className="flex items-center gap-2">
+              {hasWebhookSecret ? (
+                <CheckCircle2 className="size-4 text-emerald-500" />
+              ) : (
+                <XCircle className="size-4 text-red-500" />
+              )}
+              <span>Webhook configured: <span className="font-medium">{hasWebhookSecret ? 'Yes' : 'No'}</span></span>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

@@ -27,6 +27,7 @@ export interface Property {
   state: string;
   zip: string;
   county: string | null;
+  country: string;
   property_type: 'residential_multifamily' | 'residential_single' | 'commercial' | 'mixed_use';
   unit_count: number;
   year_built: number | null;
@@ -36,10 +37,14 @@ export interface Property {
   is_section8: boolean;
   is_tax_credit: boolean;
   internal_notes: string | null;
-  // Identity resolution fields (populated by property-identity-resolver)
+  // Address normalization
+  input_address: string | null;
   normalized_address: string | null;
   latitude: number | null;
   longitude: number | null;
+  address_provider: string | null;
+  address_confidence: number | null;
+  // Identity resolution
   jurisdiction_city: string | null;
   jurisdiction_county: string | null;
   jurisdiction_state: string | null;
@@ -48,9 +53,102 @@ export interface Property {
   local_tax_id: string | null;
   provider_name: string | null;
   provider_confidence: number | null;
+  identity_provider: string | null;
+  identity_confidence: number | null;
   identity_resolved_at: string | null;
+  // Archive support
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Address provider types (Phase 3)
+// ---------------------------------------------------------------------------
+
+export interface NormalizedAddress {
+  street: string;
+  unit: string | null;
+  city: string;
+  state: string;
+  zip: string;
+  county: string | null;
+  country: string;
+  latitude: number | null;
+  longitude: number | null;
+  placeId: string | null;
+  formattedAddress: string;
+  provider: string;
+  confidence: number;
+}
+
+export interface AddressSuggestion {
+  placeId: string;
+  description: string;
+  mainText: string;
+  secondaryText: string;
+}
+
+// ---------------------------------------------------------------------------
+// Property identity types (Phase 4)
+// ---------------------------------------------------------------------------
+
+export interface PropertyIdentity {
+  nationalPropertyId: string | null;
+  localParcelId: string | null;
+  localTaxId: string | null;
+  provider: string;
+  confidence: number;
+  resolvedAt: string;
+  rawResponse?: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// Jurisdiction coverage types (Phase 5)
+// ---------------------------------------------------------------------------
+
+export type CoverageStatus = 'active' | 'partial' | 'pending' | 'unsupported';
+
+export interface JurisdictionCoverage {
+  id: string;
+  country: string;
+  state: string | null;
+  city: string | null;
+  jurisdiction_key: string;
+  coverage_status: CoverageStatus;
+  adapters_available: string[];
+  intake_enabled: boolean;
+  billing_enabled: boolean;
+  waitlist_enabled: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Compliance adapter types (Phase 6)
+// ---------------------------------------------------------------------------
+
+export interface ComplianceRecord {
+  id: string;
+  type: string;
+  status: string;
+  description: string;
+  date: string | null;
+  sourceUrl: string | null;
+  rawData?: Record<string, unknown>;
+}
+
+export interface ComplianceResult {
+  adapterName: string;
+  jurisdiction: string;
+  matchMethod: 'local_id' | 'normalized_address' | 'fallback';
+  matchState: 'matched' | 'partial' | 'no_match';
+  recordCount: number;
+  sourceEndpoint: string;
+  noMatchReason: string | null;
+  records: ComplianceRecord[];
+  checkedAt: string;
 }
 
 export interface Document {

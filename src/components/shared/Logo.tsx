@@ -39,8 +39,8 @@ export function Logo({ className, size = 'md', showTagline = false, href = '/' }
         </div>
         {/* Wordmark */}
         <span className={cn('font-bold tracking-tight', sizes[size].text)} style={{ fontFamily: 'Georgia, serif' }}>
-          <span className="text-[#0f172a]">Reg</span>
-          <span className="text-[#059669]">Lynx</span>
+          <span className="text-slate-900">Reg</span>
+          <span className="text-emerald-600">Lynx</span>
         </span>
       </div>
       {showTagline && (
