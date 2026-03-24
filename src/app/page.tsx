@@ -226,7 +226,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Why RegLynx? — NEW SECTION */}
+      {/* Why RegLynx? â NEW SECTION */}
       <WhyRegLynx />
 
       {/* Pricing */}
@@ -308,7 +308,7 @@ export default function LandingPage() {
             properties.&rdquo;
           </p>
           <p className="mt-4 text-sm font-medium text-[#0f172a]">
-            Ramesses Management &amp; Contracting LLC
+            RCCHM Consulting Group
           </p>
         </div>
       </section>
@@ -348,8 +348,7 @@ export default function LandingPage() {
             <div>
               <Logo size="sm" />
               <p className="text-sm text-slate-400 mt-3 max-w-xs">
-                RegLynx &mdash; A product of Ramesses Management &amp;
-                Contracting LLC
+                RegLynx &mdash; A product of RCCHM Consulting Group
               </p>
               <p className="text-sm text-slate-500 mt-2">
                 1700 Market St. Suite 1005, Philadelphia, PA 19103
