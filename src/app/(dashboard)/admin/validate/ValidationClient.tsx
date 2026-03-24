@@ -4,19 +4,35 @@ import { useState } from 'react';
 import type { CoverageMatrix } from '@/lib/compliance/coverage';
 import { COVERAGE_BADGE, formatLastChecked } from '@/lib/compliance/coverage';
 
+// ── Demo addresses for quick testing ─────────────────────────────────────────
+// Known Philadelphia rental-district addresses. Use these during demos to
+// verify the resolution + adapter pipeline against real Open Data.
+const DEMO_ADDRESSES = [
+  { label: 'Fairmount / Spring Garden', address: '1500 Spring Garden St, Philadelphia, PA 19130' },
+  { label: 'South Philly / Passyunk', address: '2300 W Passyunk Ave, Philadelphia, PA 19145' },
+  { label: 'West Philly / Walnut Hill', address: '4900 Walnut St, Philadelphia, PA 19139' },
+];
+
 // ── Response type from the API ────────────────────────────────────────────────
 
 interface AdapterInfo {
   success: boolean;
   error: string | null;
   recordCount: number;
+  matchMethod: string | null;
+  matchState: string | null;
+  queryInput: string | null;
+  sourceEndpoint: string | null;
+  noMatchReason: string | null;
   classification: Record<string, unknown>;
   sample: Record<string, unknown>[];
 }
 
 interface ValidationResult {
   address: string;
+  normalizedAddress: string | null;
   opaAccountNumber: string | null;
+  aisResolution: Record<string, unknown> | null;
   adapters: {
     lni_violations: AdapterInfo;
     rental_license: AdapterInfo;
@@ -27,18 +43,57 @@ interface ValidationResult {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+const MATCH_STATE_BADGE: Record<string, string> = {
+  verified_match: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  no_match_found: 'bg-slate-100 text-slate-600 border-slate-200',
+  query_failed:   'bg-red-50 text-red-600 border-red-200',
+  pending_verification: 'bg-amber-50 text-amber-700 border-amber-200',
+};
+
 function AdapterCard({ name, info }: { name: string; info: AdapterInfo }) {
   const [showSample, setShowSample] = useState(false);
+  const stateCls = MATCH_STATE_BADGE[info.matchState ?? ''] ?? 'bg-slate-100 text-slate-600 border-slate-200';
+
   return (
     <div className="rounded-lg border bg-white p-4 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium text-sm">{name}</span>
-        <span className={`rounded border px-2 py-0.5 text-[11px] font-medium ${
-          info.success ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'
-        }`}>
-          {info.success ? 'OK' : 'Failed'}
-        </span>
+        <div className="flex gap-1.5">
+          {info.matchState && (
+            <span className={`rounded border px-2 py-0.5 text-[11px] font-medium ${stateCls}`}>
+              {info.matchState.replace(/_/g, ' ')}
+            </span>
+          )}
+          <span className={`rounded border px-2 py-0.5 text-[11px] font-medium ${
+            info.success ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'
+          }`}>
+            {info.success ? 'OK' : 'Failed'}
+          </span>
+        </div>
       </div>
+
+      {/* Match method + query input + endpoint */}
+      {(info.matchMethod || info.queryInput) && (
+        <div className="rounded bg-slate-50 border px-3 py-2 text-[11px] font-mono text-slate-600 space-y-0.5">
+          {info.matchMethod && <div><span className="text-slate-400">method:</span> {info.matchMethod}</div>}
+          {info.queryInput && <div><span className="text-slate-400">query:</span> {info.queryInput}</div>}
+          {info.sourceEndpoint && (
+            <div className="truncate">
+              <span className="text-slate-400">endpoint:</span>{' '}
+              <a href={info.sourceEndpoint} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                {info.sourceEndpoint.slice(0, 80)}{info.sourceEndpoint.length > 80 ? '…' : ''}
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* No-match reason */}
+      {info.noMatchReason && (
+        <p className="rounded bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-800">
+          {info.noMatchReason}
+        </p>
+      )}
 
       {info.error && (
         <p className="rounded bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">{info.error}</p>
@@ -124,8 +179,7 @@ export function ValidationClient() {
   const [result, setResult] = useState<ValidationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function runValidation(addr: string, opa?: string) {
     setLoading(true);
     setResult(null);
     setError(null);
@@ -134,7 +188,7 @@ export function ValidationClient() {
       const res = await fetch('/api/admin/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, opaAccountNumber: opaNumber || undefined }),
+        body: JSON.stringify({ address: addr, opaAccountNumber: opa || undefined }),
       });
 
       if (!res.ok) {
@@ -152,8 +206,40 @@ export function ValidationClient() {
     }
   }
 
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await runValidation(address, opaNumber || undefined);
+  }
+
+  function loadDemo(addr: string) {
+    setAddress(addr);
+    setOpaNumber('');
+    setResult(null);
+    setError(null);
+  }
+
   return (
     <div className="space-y-6">
+      {/* Demo address quick-tests */}
+      <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 space-y-2">
+        <p className="text-xs font-semibold text-blue-800">Demo addresses — click to load, then run validation</p>
+        <div className="flex flex-wrap gap-2">
+          {DEMO_ADDRESSES.map(({ label, address: addr }) => (
+            <button
+              key={addr}
+              type="button"
+              onClick={() => loadDemo(addr)}
+              className="rounded border border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-800 hover:bg-blue-50"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-blue-600">
+          These are real Philadelphia addresses. AIS resolution runs automatically — no OPA number needed.
+        </p>
+      </div>
+
       {/* Input form */}
       <form onSubmit={handleSubmit} className="rounded-lg border bg-white p-5 space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
@@ -173,7 +259,7 @@ export function ValidationClient() {
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-slate-700" htmlFor="opa">
-              OPA Account Number (optional)
+              OPA Account Number <span className="font-normal text-muted-foreground">(optional — resolved automatically)</span>
             </label>
             <input
               id="opa"
@@ -194,7 +280,7 @@ export function ValidationClient() {
             {loading ? 'Running…' : 'Run Validation'}
           </button>
           <span className="text-xs text-muted-foreground">
-            Calls live Philadelphia Open Data APIs — no DB writes
+            Resolves AIS → queries live Philadelphia Open Data — no DB writes
           </span>
         </div>
       </form>
@@ -209,10 +295,39 @@ export function ValidationClient() {
       {/* Results */}
       {result && (
         <div className="space-y-6">
+          {/* Identity resolution trace */}
+          <div className="rounded-lg border bg-white p-4 space-y-3">
+            <p className="text-sm font-semibold">Property Identity Resolution</p>
+            <div className="grid gap-2 sm:grid-cols-2 text-xs">
+              <div className="rounded bg-slate-50 p-2 space-y-0.5">
+                <p className="text-muted-foreground">Input address</p>
+                <p className="font-medium">{result.address}</p>
+              </div>
+              <div className="rounded bg-slate-50 p-2 space-y-0.5">
+                <p className="text-muted-foreground">Normalized address</p>
+                <p className="font-medium font-mono">{result.normalizedAddress ?? '—'}</p>
+              </div>
+              <div className="rounded bg-slate-50 p-2 space-y-0.5">
+                <p className="text-muted-foreground">OPA account number</p>
+                <p className={`font-bold font-mono ${result.opaAccountNumber ? 'text-emerald-700' : 'text-slate-400'}`}>
+                  {result.opaAccountNumber ?? 'Not resolved'}
+                </p>
+              </div>
+              {result.aisResolution && Object.entries(result.aisResolution).filter(([k]) => !['note'].includes(k)).map(([k, v]) => (
+                <div key={k} className="rounded bg-slate-50 p-2 space-y-0.5">
+                  <p className="text-muted-foreground capitalize">{k.replace(/([A-Z])/g, ' $1').toLowerCase()}</p>
+                  <p className="font-medium font-mono">{String(v ?? '—')}</p>
+                </div>
+              ))}
+            </div>
+            {result.aisResolution && 'note' in result.aisResolution && (
+              <p className="text-[11px] text-muted-foreground">{String(result.aisResolution.note)}</p>
+            )}
+          </div>
+
+          {/* Timestamps */}
           <p className="text-xs text-muted-foreground">
-            Checked <strong>{result.address}</strong>
-            {result.opaAccountNumber && <> · OPA {result.opaAccountNumber}</>}
-            {' '}· {new Date(result.checkedAt).toLocaleString()}
+            Checked at {new Date(result.checkedAt).toLocaleString()}
           </p>
 
           {/* Adapter results side by side */}

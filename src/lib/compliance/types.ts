@@ -57,6 +57,44 @@ export interface NormalizedAddress {
   opaAccountNumber?: string;
 }
 
+/**
+ * Enriched query input passed to every adapter.
+ * Adapters choose the best available identifier in priority order:
+ *   1. opaAccountNumber (most reliable — Philly parcel ID)
+ *   2. normalizedAddress (canonical form from geocoder)
+ *   3. addressRaw (user-entered; lowest confidence)
+ */
+export interface AdapterQueryInput {
+  /** Raw address as entered by the user */
+  addressRaw: string;
+  /** Canonical single-line address from the identity resolver */
+  normalizedAddress?: string | null;
+  /** Philadelphia OPA account number (parcel / tax ID) */
+  opaAccountNumber?: string | null;
+  city: string;
+  state: string;
+}
+
+/**
+ * How the adapter found (or failed to find) records.
+ * Stored on AdapterResult and used for UI trust indicators.
+ */
+export type AdapterMatchMethod =
+  | 'opa_account'        // Queried by OPA / stable parcel ID — most reliable
+  | 'normalized_address' // Queried by canonical geocoded address
+  | 'address_fallback'   // Queried by raw address prefix — lowest confidence
+  | 'none';              // No query sent (e.g., no address available)
+
+/**
+ * Explicit outcome of an adapter query run.
+ * Replaces silent empty results.
+ */
+export type AdapterMatchState =
+  | 'verified_match'       // Query succeeded and returned ≥1 records
+  | 'no_match_found'       // Query succeeded but 0 records returned
+  | 'query_failed'         // API call failed (network / HTTP error)
+  | 'pending_verification';// Property ID not resolved; match quality uncertain
+
 /** A single record returned from a data source adapter */
 export interface SourceRecord {
   sourceType: 'violation' | 'permit' | 'license' | 'inspection' | 'assessment';
@@ -75,6 +113,16 @@ export interface AdapterResult {
   error?: string;
   /** True if this adapter is a stub returning mock data */
   isStub?: boolean;
+  /** Which identifier was used to query this adapter */
+  matchMethod: AdapterMatchMethod;
+  /** Explicit outcome — never silently empty */
+  matchState: AdapterMatchState;
+  /** The query string / value that was sent to the API */
+  queryInput?: string;
+  /** The full URL that was fetched */
+  sourceEndpoint?: string;
+  /** Raw record count returned before any filtering */
+  recordCount?: number;
 }
 
 // ── Evaluated compliance item ─────────────────────────────────────────────────

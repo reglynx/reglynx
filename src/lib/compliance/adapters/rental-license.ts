@@ -9,20 +9,24 @@
  * Dataset page: https://www.opendataphilly.org/datasets/business-licenses
  *
  * Rental license types in Philadelphia:
- *   - 'RENTAL' (general rental license)
+ *   - 'RENTAL'              (general rental license)
  *   - 'RENTAL MULTI-FAMILY' (multi-unit buildings)
- *   - 'RENTAL SINGLE FAMILY' (1-unit)
+ *   - 'RENTAL SINGLE FAMILY'(1-unit)
  *
- * A separate "Certificate of Rental Suitability" is required per tenancy but
- * is not in this dataset — it is issued on demand and not tracked centrally.
- *
- * TODO (production): Cross-reference with L&I License data
- *   (https://data.phila.gov/resource/qgdg-qhvy.json) for more detail.
- *
- * TODO (multi-city expansion): Abstract as RentalLicenseAdapter<City>.
+ * Query priority:
+ *   1. OPA account number  — most reliable; exact parcel match
+ *   2. Normalized address  — canonical form from geocoder
+ *   3. Raw address prefix  — lowest confidence
  */
 
-import type { AdapterResult, SourceRecord } from '../types';
+import type {
+  AdapterResult,
+  AdapterQueryInput,
+  AdapterMatchMethod,
+  AdapterMatchState,
+  SourceRecord,
+} from '../types';
+import { logger } from '@/lib/debug-logger';
 
 const DATASET_URL = 'https://data.phila.gov/resource/jp3q-4wb6.json';
 const SOURCE_PAGE = 'https://www.opendataphilly.org/datasets/business-licenses';
@@ -38,9 +42,9 @@ export interface RentalLicenseRecord {
   licensenumber?: string;
   licensekey?: string;
   licensecodenumber?: string;
-  licensetype?: string;          // 'RENTAL', 'RENTAL MULTI-FAMILY', etc.
+  licensetype?: string;
   licensestatusdate?: string;
-  licensestatus?: string;        // 'Active', 'Inactive', 'Expired', 'Pending'
+  licensestatus?: string;
   expirationdate?: string;
   initialissuedate?: string;
   opa_account_num?: string;
@@ -56,18 +60,18 @@ function buildHeaders(): HeadersInit {
 }
 
 /**
- * Normalise a raw address string for a SODA LIKE query.
- * Returns "STREETNUM STREETNAME" prefix (first 3 tokens after cleaning).
- * Example: "1234 N. Broad St, Philadelphia, PA 19130" → "1234 N BROAD"
+ * Sanitize an address string for a SODA LIKE query.
+ * Returns first 3 tokens (house number + first 2 street words), uppercased.
  */
-function normalizeAddressForQuery(raw: string): string {
-  const cleaned = raw
+function sanitizeAddressPrefix(raw: string): string {
+  return raw
     .toUpperCase()
     .replace(/[.,#]/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim();
-  // Keep 3 tokens (number + first 2 street words) for a tighter prefix match
-  return cleaned.split(' ').slice(0, 3).join(' ');
+    .trim()
+    .split(' ')
+    .slice(0, 3)
+    .join(' ');
 }
 
 /**
@@ -76,9 +80,7 @@ function normalizeAddressForQuery(raw: string): string {
 function parseExpirationDate(raw: string | undefined): Date | null {
   if (!raw) return null;
   try {
-    // Strip time component if present (e.g. "2025-12-31T00:00:00.000")
-    const dateStr = raw.split('T')[0];
-    const d = new Date(dateStr);
+    const d = new Date(raw.split('T')[0]);
     if (isNaN(d.getTime())) return null;
     return d;
   } catch {
@@ -87,44 +89,79 @@ function parseExpirationDate(raw: string | undefined): Date | null {
 }
 
 /**
- * Return true if a license record has an active status per the `licensestatus` field.
- * We check the explicit status field first; expiration date is secondary.
+ * Return true if a license record has an active status.
  */
 function isActiveStatus(raw: RentalLicenseRecord): boolean {
   const s = (raw.licensestatus ?? '').trim().toUpperCase();
-  // Accept 'ACTIVE' and 'PENDING' as live statuses
   return s === 'ACTIVE' || s === 'PENDING';
 }
 
+const RENTAL_LICENSE_FILTER =
+  `(licensetype='RENTAL' OR licensetype like 'RENTAL %')`;
+
 /**
  * Fetch rental licenses for a Philadelphia property.
- * Returns ALL license records (active and historical).
+ *
+ * Query priority:
+ *   1. OPA account number (exact match)
+ *   2. Normalized canonical address (tight prefix)
+ *   3. Raw address prefix (lowest confidence)
  */
 export async function fetchRentalLicenses(
-  addressRaw: string,
-  opaAccountNumber?: string,
+  input: AdapterQueryInput,
 ): Promise<AdapterResult> {
+  let whereClause: string;
+  let matchMethod: AdapterMatchMethod;
+  let queryInput: string;
+
+  if (input.opaAccountNumber) {
+    whereClause = `opa_account_num='${input.opaAccountNumber}' AND ${RENTAL_LICENSE_FILTER}`;
+    matchMethod = 'opa_account';
+    queryInput = input.opaAccountNumber;
+  } else if (input.normalizedAddress) {
+    const prefix = sanitizeAddressPrefix(input.normalizedAddress);
+    whereClause = `upper(address) like '${prefix}%' AND ${RENTAL_LICENSE_FILTER}`;
+    matchMethod = 'normalized_address';
+    queryInput = prefix;
+  } else {
+    const prefix = sanitizeAddressPrefix(input.addressRaw);
+    whereClause = `upper(address) like '${prefix}%' AND ${RENTAL_LICENSE_FILTER}`;
+    matchMethod = 'address_fallback';
+    queryInput = prefix;
+  }
+
+  const sourceEndpoint = `${DATASET_URL}?$where=${encodeURIComponent(whereClause)}&$limit=10&$order=expirationdate DESC`;
+
+  logger.info('adapter_execution', 'Rental license query', { adapter: 'rental_license', matchMethod, queryInput, endpoint: DATASET_URL });
+
   try {
-    let query: string;
-
-    if (opaAccountNumber) {
-      query = `opa_account_num='${opaAccountNumber}' AND (licensetype='RENTAL' OR licensetype like 'RENTAL %')`;
-    } else {
-      const prefix = normalizeAddressForQuery(addressRaw);
-      query = `upper(address) like '${prefix}%' AND (licensetype='RENTAL' OR licensetype like 'RENTAL %')`;
-    }
-
-    const url = `${DATASET_URL}?$where=${encodeURIComponent(query)}&$limit=10&$order=expirationdate DESC`;
-    const res = await fetch(url, {
+    const res = await fetch(sourceEndpoint, {
       headers: buildHeaders(),
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!res.ok) {
-      throw new Error(`Rental License API returned ${res.status}: ${res.statusText}`);
+      logger.error('adapter_execution', 'Rental license API error', { status: res.status, matchMethod });
+      return {
+        adapterName: 'rental_license',
+        success: false,
+        records: [],
+        error: `Rental License API returned ${res.status}: ${res.statusText}`,
+        matchMethod,
+        matchState: 'query_failed',
+        queryInput,
+        sourceEndpoint,
+        recordCount: 0,
+      };
     }
 
     const records: RentalLicenseRecord[] = await res.json();
+    const recordCount = records.length;
+
+    logger.info('adapter_execution', 'Rental license fetched', { adapter: 'rental_license', matchMethod, recordCount, matchState: recordCount > 0 ? 'verified_match' : 'no_match_found' });
+
+    const matchState: AdapterMatchState =
+      recordCount > 0 ? 'verified_match' : 'no_match_found';
 
     const sourceRecords: SourceRecord[] = records.map((r) => ({
       sourceType: 'license',
@@ -141,26 +178,36 @@ export async function fetchRentalLicenses(
       adapterName: 'rental_license',
       success: true,
       records: sourceRecords,
+      matchMethod,
+      matchState,
+      queryInput,
+      sourceEndpoint,
+      recordCount,
     };
   } catch (error) {
-    console.error('[rental-license] fetch error:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error('adapter_execution', 'Rental license fetch error', { adapter: 'rental_license', matchMethod, error: message });
     return {
       adapterName: 'rental_license',
       success: false,
       records: [],
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
+      matchMethod,
+      matchState: 'query_failed',
+      queryInput,
+      sourceEndpoint,
+      recordCount: 0,
     };
   }
 }
 
 /**
- * Get the current compliance status of a rental license.
+ * Evaluate the compliance status of a rental license from adapter records.
  *
  * Strategy:
  *   1. Prefer records whose `licensestatus` field is 'Active' or 'Pending'.
  *   2. Among those, pick the one with the latest expiration date.
- *   3. If no active records exist, fall back to the most recently expired record
- *      so the operator sees history rather than "not_found".
+ *   3. Fall back to most-recently-expired record if no active records found.
  */
 export function evaluateRentalLicenseStatus(records: SourceRecord[]): {
   status: 'active' | 'expired' | 'expiring' | 'not_found';
@@ -172,11 +219,11 @@ export function evaluateRentalLicenseStatus(records: SourceRecord[]): {
     return { status: 'not_found', expirationDate: null, licenseNumber: null, daysUntilExpiration: null };
   }
 
-  // Partition into active vs historical
-  const activeRecords = records.filter((r) => isActiveStatus(r.rawData as unknown as RentalLicenseRecord));
+  const activeRecords = records.filter((r) =>
+    isActiveStatus(r.rawData as unknown as RentalLicenseRecord),
+  );
   const pool = activeRecords.length > 0 ? activeRecords : records;
 
-  // Sort pool by expiration date descending — most recent first
   const sorted = [...pool].sort((a, b) => {
     const da = parseExpirationDate(a.effectiveDate ?? undefined);
     const db = parseExpirationDate(b.effectiveDate ?? undefined);
@@ -192,20 +239,16 @@ export function evaluateRentalLicenseStatus(records: SourceRecord[]): {
 
   const expiry = parseExpirationDate(expirationDate ?? undefined);
   if (!expiry) {
-    // Expiration date is missing or unparseable — can't determine status
     return { status: 'not_found', expirationDate: null, licenseNumber, daysUntilExpiration: null };
   }
 
-  const now = new Date();
-  const daysUntilExpiration = Math.ceil((expiry.getTime() - now.getTime()) / 86_400_000);
+  const daysUntilExpiration = Math.ceil((expiry.getTime() - Date.now()) / 86_400_000);
 
   if (daysUntilExpiration < 0) {
     return { status: 'expired', expirationDate, licenseNumber, daysUntilExpiration };
   }
-
   if (daysUntilExpiration <= EXPIRING_SOON_DAYS) {
     return { status: 'expiring', expirationDate, licenseNumber, daysUntilExpiration };
   }
-
   return { status: 'active', expirationDate, licenseNumber, daysUntilExpiration };
 }

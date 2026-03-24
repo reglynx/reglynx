@@ -1,15 +1,43 @@
 import { NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
+import { stripe, isStripeConfigured } from '@/lib/stripe';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import type { Organization } from '@/lib/types';
 
+const ALLOWED_PRICE_IDS = new Set(
+  [
+    process.env.STRIPE_PRICE_ID_PILOT,
+    process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_PILOT,
+    process.env.STRIPE_PRICE_ID_STARTER,
+    process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_STARTER,
+    process.env.STRIPE_PRICE_ID_PROFESSIONAL,
+    process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_PROFESSIONAL,
+    process.env.STRIPE_PRICE_ID_ENTERPRISE,
+    process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_ENTERPRISE,
+  ].filter(Boolean),
+);
+
 export async function POST(request: Request) {
   try {
+    if (!isStripeConfigured()) {
+      return NextResponse.json(
+        { error: 'Billing is not yet configured. Contact support@reglynx.com to get started.' },
+        { status: 503 },
+      );
+    }
+
     const { priceId } = await request.json();
 
     if (!priceId) {
       return NextResponse.json(
         { error: 'Price ID is required' },
+        { status: 400 },
+      );
+    }
+
+    // Validate priceId is one of our known price IDs to prevent arbitrary Stripe price use
+    if (ALLOWED_PRICE_IDS.size > 0 && !ALLOWED_PRICE_IDS.has(priceId)) {
+      return NextResponse.json(
+        { error: 'Invalid price ID' },
         { status: 400 },
       );
     }

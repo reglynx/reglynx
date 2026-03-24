@@ -37,21 +37,26 @@ export interface Property {
   is_section8: boolean;
   is_tax_credit: boolean;
   internal_notes: string | null;
-  // Address normalization (Phase 2-3)
+  // Address normalization
   input_address: string | null;
   normalized_address: string | null;
   latitude: number | null;
   longitude: number | null;
   address_provider: string | null;
   address_confidence: number | null;
-  // Property identity resolution (Phase 4)
+  // Identity resolution
+  jurisdiction_city: string | null;
+  jurisdiction_county: string | null;
+  jurisdiction_state: string | null;
   national_property_id: string | null;
   local_parcel_id: string | null;
   local_tax_id: string | null;
+  provider_name: string | null;
+  provider_confidence: number | null;
   identity_provider: string | null;
   identity_confidence: number | null;
   identity_resolved_at: string | null;
-  // Archive support (Phase 7)
+  // Archive support
   archived_at: string | null;
   created_at: string;
   updated_at: string;

@@ -17,6 +17,8 @@ import {
   evaluateRentalLicenseStatus,
 } from '@/lib/compliance/adapters/rental-license';
 import { buildCoverageMatrix } from '@/lib/compliance/coverage';
+import { resolvePhiladelphiaIdentity } from '@/lib/services/philadelphia-property-resolver';
+import { normalizeAddress } from '@/lib/services/property-identity-resolver';
 
 function getAdminEmails(): Set<string> {
   const raw = process.env.ADMIN_EMAILS ?? '';
@@ -56,11 +58,48 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'address is required' }, { status: 400 });
   }
 
-  const opaAccountNumber = (body.opaAccountNumber ?? '').trim() || undefined;
+  const opaAccountNumberInput = (body.opaAccountNumber ?? '').trim() || undefined;
+
+  // Run Philadelphia AIS resolution to obtain canonical address and OPA account number.
+  // This mirrors what the compliance engine does, ensuring the validate tool
+  // tests the exact same resolution path as production.
+  const rawAddr = { addressLine1: address, city: 'Philadelphia', state: 'PA' };
+  const normalizedAddressStr = normalizeAddress(rawAddr);
+
+  let resolvedOpa = opaAccountNumberInput ?? null;
+  let resolvedNormalizedAddress: string | null = normalizedAddressStr;
+  let aisResolution: Record<string, unknown> | null = null;
+
+  if (!resolvedOpa) {
+    const identity = await resolvePhiladelphiaIdentity(rawAddr);
+    if (identity) {
+      resolvedOpa = identity.localParcelId;
+      resolvedNormalizedAddress = identity.normalizedAddress;
+      aisResolution = {
+        normalizedAddress: identity.normalizedAddress,
+        localParcelId: identity.localParcelId,
+        localTaxId: identity.localTaxId,
+        providerName: identity.providerName,
+        providerConfidence: identity.providerConfidence,
+        latitude: identity.latitude,
+        longitude: identity.longitude,
+      };
+    }
+  } else {
+    aisResolution = { note: 'OPA number supplied manually — AIS lookup skipped', opaAccountNumber: resolvedOpa };
+  }
+
+  const queryInput = {
+    addressRaw: address,
+    normalizedAddress: resolvedNormalizedAddress,
+    opaAccountNumber: resolvedOpa,
+    city: 'Philadelphia',
+    state: 'PA',
+  };
 
   const [violationsResult, licenseResult] = await Promise.all([
-    fetchLniViolations(address, opaAccountNumber),
-    fetchRentalLicenses(address, opaAccountNumber),
+    fetchLniViolations(queryInput),
+    fetchRentalLicenses(queryInput),
   ]);
 
   const violations = classifyViolations(violationsResult.records);
@@ -93,22 +132,53 @@ export async function POST(req: Request) {
 
   const coverage = buildCoverageMatrix('__validate__', syntheticItems, syntheticSourceRecords);
 
+  // Produce a human-readable reason for each no-match case
+  function noMatchReason(
+    result: typeof violationsResult,
+    resolvedOpaNum: string | null,
+  ): string | null {
+    if (result.success && result.matchState === 'no_match_found') {
+      if (resolvedOpaNum && result.matchMethod === 'opa_account') {
+        return `Queried by OPA account ${resolvedOpaNum} — no records in this dataset for this parcel.`;
+      }
+      if (result.matchMethod === 'normalized_address') {
+        return `Queried by normalized address — no records matched "${result.queryInput}". Try OPA lookup.`;
+      }
+      return `Queried by address prefix "${result.queryInput}" — no records matched. Address-fallback queries have lower confidence.`;
+    }
+    if (!result.success && result.matchState === 'query_failed') {
+      return `API request failed: ${result.error ?? 'unknown error'}`;
+    }
+    return null;
+  }
+
   return NextResponse.json({
     address,
-    opaAccountNumber: opaAccountNumber ?? null,
+    normalizedAddress: resolvedNormalizedAddress,
+    opaAccountNumber: resolvedOpa ?? null,
+    aisResolution,
     adapters: {
       lni_violations: {
         success: violationsResult.success,
+        matchMethod: violationsResult.matchMethod,
+        matchState: violationsResult.matchState,
+        queryInput: violationsResult.queryInput,
+        sourceEndpoint: violationsResult.sourceEndpoint ?? null,
         error: violationsResult.error ?? null,
         recordCount: violationsResult.records.length,
+        noMatchReason: noMatchReason(violationsResult, resolvedOpa),
         classification: violations,
-        // Include first 5 raw records for inspection
         sample: violationsResult.records.slice(0, 5).map((r) => r.rawData),
       },
       rental_license: {
         success: licenseResult.success,
+        matchMethod: licenseResult.matchMethod,
+        matchState: licenseResult.matchState,
+        queryInput: licenseResult.queryInput,
+        sourceEndpoint: licenseResult.sourceEndpoint ?? null,
         error: licenseResult.error ?? null,
         recordCount: licenseResult.records.length,
+        noMatchReason: noMatchReason(licenseResult, resolvedOpa),
         classification: licenseStatus,
         sample: licenseResult.records.slice(0, 5).map((r) => r.rawData),
       },

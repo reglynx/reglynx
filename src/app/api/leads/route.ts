@@ -1,42 +1,64 @@
+/**
+ * POST /api/leads
+ *
+ * Public endpoint — no authentication required.
+ * Accepts a lead submission from the /early-access page and inserts it
+ * into the leads table. RLS allows anon inserts.
+ */
+
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 
-/**
- * POST /api/leads — Store an early-access lead
- */
-export async function POST(request: Request) {
+interface LeadPayload {
+  email?: string;
+  company_name?: string;
+  city?: string;
+  state?: string;
+  property_count?: number;
+  message?: string;
+}
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+export async function POST(req: Request) {
+  let body: LeadPayload;
   try {
-    const body = await request.json();
-    const { name, email, company, city, state, unit_count, source } = body;
-
-    if (!name || !email) {
-      return NextResponse.json(
-        { error: 'Name and email are required' },
-        { status: 400 },
-      );
-    }
-
-    const supabase = createServiceClient();
-
-    const { error } = await supabase.from('leads').insert({
-      name: name.trim(),
-      email: email.trim().toLowerCase(),
-      company: company?.trim() || null,
-      city: city?.trim() || null,
-      state: state?.trim() || null,
-      unit_count: unit_count?.toString() || null,
-      source: source || 'early_access',
-    });
-
-    if (error) {
-      console.error('[leads] insert error:', error);
-      return NextResponse.json({ error: 'Failed to save' }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true });
+    body = await req.json();
   } catch {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
+
+  const email = (body.email ?? '').trim();
+  if (!email || !isValidEmail(email)) {
+    return NextResponse.json({ error: 'A valid email address is required.' }, { status: 422 });
+  }
+
+  const propertyCount =
+    body.property_count !== undefined
+      ? Math.max(0, Math.floor(Number(body.property_count)))
+      : null;
+
+  // Use service client — bypasses RLS so we don't need a session
+  const supabase = createServiceClient();
+
+  const { error } = await supabase.from('leads').insert({
+    email,
+    company_name: (body.company_name ?? '').trim() || null,
+    city:          (body.city         ?? '').trim() || null,
+    state:         (body.state        ?? '').trim() || null,
+    property_count: isNaN(propertyCount as number) ? null : propertyCount,
+    message:       (body.message      ?? '').trim() || null,
+    status: 'new',
+  });
+
+  if (error) {
+    console.error('[leads] insert error:', error.message);
+    return NextResponse.json({ error: 'Failed to submit. Please try again.' }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true }, { status: 201 });
 }
 
 /**
@@ -63,7 +85,7 @@ export async function GET(request: Request) {
   // Support CSV export via ?format=csv
   const url = new URL(request.url);
   if (url.searchParams.get('format') === 'csv') {
-    const headers = ['name', 'email', 'company', 'city', 'state', 'unit_count', 'source', 'created_at'];
+    const headers = ['email', 'company_name', 'city', 'state', 'property_count', 'message', 'status', 'created_at'];
     const csvRows = [headers.join(',')];
     for (const row of data || []) {
       csvRows.push(

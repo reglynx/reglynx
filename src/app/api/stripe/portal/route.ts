@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
+import { stripe, isStripeConfigured } from '@/lib/stripe';
 import { createClient } from '@/lib/supabase/server';
 import type { Organization } from '@/lib/types';
 
 export async function POST(request: Request) {
   try {
+    if (!isStripeConfigured()) {
+      return NextResponse.json(
+        { error: 'Billing is not yet configured. Contact support@reglynx.com.' },
+        { status: 503 },
+      );
+    }
+
     // Authenticate the user
     const supabase = await createClient();
     const {
