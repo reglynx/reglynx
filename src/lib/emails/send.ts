@@ -36,7 +36,7 @@ function emailFooter(): string {
     'If you no longer wish to receive these emails, you can update your',
     'notification preferences in your RegLynx dashboard settings.',
     '',
-    'RegLynx — Ramesses Management & Contracting LLC',
+    'RegLynx — RCCHM Consulting Group',
     '1700 Market St. Suite 1005, Philadelphia, PA 19103',
     '',
     '\u00A9 2026 RegLynx. All rights reserved.',

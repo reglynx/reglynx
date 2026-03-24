@@ -365,7 +365,7 @@ export default function OnboardingPage() {
               <Label htmlFor="company_name">Company Name *</Label>
               <Input
                 id="company_name"
-                placeholder="e.g. Ramesses Management LLC"
+                placeholder="e.g. Acme Property Management LLC"
                 value={company.name}
                 onChange={(e) =>
                   setCompany({ ...company, name: e.target.value })
