@@ -11,6 +11,10 @@ import {
   CheckCircle2,
   Circle,
   ShieldCheck,
+  Pencil,
+  Archive,
+  Globe,
+  Database,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +22,8 @@ import { Badge } from '@/components/ui/badge';
 import { buttonVariants } from '@/components/ui/button';
 import { DocumentCard } from '@/components/dashboard/DocumentCard';
 import { PropertyNotesEditor } from '@/components/dashboard/PropertyNotesEditor';
-import { PROPERTY_TYPES, DOCUMENT_TYPES } from '@/lib/constants';
+import { PROPERTY_TYPES, DOCUMENT_TYPES, COVERAGE_MESSAGES } from '@/lib/constants';
+import { getCoverage } from '@/lib/jurisdiction/coverage-registry';
 import type { Organization, Property, Document } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
@@ -77,6 +82,14 @@ export default async function PropertyDetailPage({
 
   if (!property) notFound();
 
+  // Get jurisdiction coverage
+  const coverage = await getCoverage(
+    property.state,
+    property.city?.toLowerCase() === 'philadelphia' && property.state === 'PA'
+      ? 'Philadelphia'
+      : undefined,
+  );
+
   // Fetch documents for this property
   const { data: documents } = await supabase
     .from('documents')
@@ -125,6 +138,13 @@ export default async function PropertyDetailPage({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Badge variant="secondary">{typeLabel}</Badge>
+            <Link
+              href={`/properties/${property.id}/edit`}
+              className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' gap-1.5'}
+            >
+              <Pencil className="size-3.5" />
+              Edit
+            </Link>
             <Link
               href={`/compliance/${property.id}`}
               className={buttonVariants({ variant: 'outline', size: 'sm' }) + ' gap-1.5'}
@@ -179,6 +199,62 @@ export default async function PropertyDetailPage({
               <Badge variant="outline">Elevator</Badge>
             )}
           </div>
+          {/* Coverage status */}
+          <div className="mt-4 rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm">
+                <Globe className="size-3.5 text-muted-foreground" />
+                <span className="font-medium">Jurisdiction Coverage</span>
+              </div>
+              <Badge
+                variant={coverage.status === 'active' ? 'default' : 'secondary'}
+                className={
+                  coverage.status === 'active'
+                    ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100'
+                    : coverage.status === 'pending'
+                      ? 'bg-amber-100 text-amber-800 hover:bg-amber-100'
+                      : ''
+                }
+              >
+                {coverage.message}
+              </Badge>
+            </div>
+          </div>
+
+          {/* Resolution info (when available) */}
+          {(property.normalized_address || property.local_parcel_id) && (
+            <div className="mt-3 rounded-lg border bg-slate-50 p-3 text-xs text-muted-foreground">
+              <div className="mb-1 flex items-center gap-1 font-medium text-slate-700">
+                <Database className="size-3" />
+                Verified Address
+              </div>
+              {property.normalized_address && (
+                <p>Normalized: {property.normalized_address}</p>
+              )}
+              {property.local_parcel_id && (
+                <p>Parcel ID: {property.local_parcel_id}</p>
+              )}
+              {property.local_tax_id && (
+                <p>Tax ID: {property.local_tax_id}</p>
+              )}
+              {property.address_provider && (
+                <p>
+                  Address provider: {property.address_provider}
+                  {property.address_confidence
+                    ? ` (${Math.round(property.address_confidence * 100)}% confidence)`
+                    : ''}
+                </p>
+              )}
+              {property.identity_provider && (
+                <p>
+                  Identity provider: {property.identity_provider}
+                  {property.identity_confidence
+                    ? ` (${Math.round(property.identity_confidence * 100)}% confidence)`
+                    : ''}
+                </p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -231,7 +307,7 @@ export default async function PropertyDetailPage({
         </CardContent>
       </Card>
 
-      {/* ---- Internal notes (pilot tester annotations) ---- */}
+      {/* ---- Internal notes ---- */}
       <Card>
         <CardContent className="py-5">
           <PropertyNotesEditor

@@ -209,7 +209,10 @@ export default async function DashboardPage({
       .limit(1),
   ]);
 
-  const properties: Property[] = propertiesRes.data ?? [];
+  // Filter out archived properties from active dashboard
+  const properties: Property[] = (propertiesRes.data ?? []).filter(
+    (p: Property) => !p.archived_at
+  );
   const documents: Document[] = documentsRes.data ?? [];
   const orgAlerts: (OrgAlert & { alert: RegulatoryAlert })[] = alertsRes.data ?? [];
   const auditEntries: AuditLogEntry[] = auditRes.data ?? [];
@@ -386,7 +389,7 @@ export default async function DashboardPage({
             </Link>
           </div>
           {orgAlerts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No recent alerts.</p>
+            <p className="text-sm text-muted-foreground">No active issues found in monitored sources.</p>
           ) : (
             <div className="space-y-3">
               {orgAlerts.map((a) => (

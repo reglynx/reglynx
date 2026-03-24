@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { PROPERTY_TYPES, SUBSCRIPTION_PLANS } from '@/lib/constants';
+import { PROPERTY_TYPES, SUBSCRIPTION_PLANS, CONTIGUOUS_US_STATES, isStateSupported, COVERAGE_MESSAGES } from '@/lib/constants';
 import type { SubscriptionPlan } from '@/lib/constants';
 import {
   Card,
@@ -33,6 +33,7 @@ interface PropertyFormData {
   state: string;
   zip: string;
   county?: string;
+  country: string;
   property_type: 'residential_multifamily' | 'residential_single' | 'commercial' | 'mixed_use';
   unit_count: number;
   year_built?: number;
@@ -49,8 +50,9 @@ const propertySchema = z.object({
   address_line2: z.string().optional(),
   city: z.string().min(2, 'City is required'),
   state: z.string().min(2, 'State is required'),
-  zip: z.string().min(5, 'ZIP code is required'),
+  zip: z.string().regex(/^\d{5}(-\d{4})?$/, 'Enter a valid U.S. ZIP code'),
   county: z.string().optional(),
+  country: z.string().default('US'),
   property_type: z.enum([
     'residential_multifamily',
     'residential_single',
@@ -83,6 +85,7 @@ export default function NewPropertyPage() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(propertySchema) as any,
     defaultValues: {
+      country: 'US',
       city: 'Philadelphia',
       state: 'PA',
       property_type: 'residential_multifamily',
@@ -125,6 +128,12 @@ export default function NewPropertyPage() {
         return;
       }
 
+      // Validate state is in contiguous 48
+      if (!isStateSupported(data.state)) {
+        setError(COVERAGE_MESSAGES.unsupported);
+        return;
+      }
+
       // Billing gate: enforce per-plan property limits
       const [{ count: propCount }, { data: orgData }] = await Promise.all([
         supabase
@@ -151,10 +160,19 @@ export default function NewPropertyPage() {
         setError(
           isActivated
             ? `Your ${planInfo.name} plan allows up to ${effectiveLimit} ${effectiveLimit === 1 ? 'property' : 'properties'}. Contact support@reglynx.com to upgrade.`
-            : 'Add a billing plan in Settings → Billing to add more properties.',
+            : 'Add a billing plan in Settings \u2192 Billing to add more properties.',
         );
         return;
       }
+
+      // Build input_address for later normalization
+      const inputAddress = [
+        data.address_line1,
+        data.address_line2,
+        data.city,
+        data.state,
+        data.zip,
+      ].filter(Boolean).join(', ');
 
       // Insert the property
       const { data: newProp, error: insertError } = await supabase
@@ -165,9 +183,11 @@ export default function NewPropertyPage() {
           address_line1: data.address_line1,
           address_line2: data.address_line2 || null,
           city: data.city,
-          state: data.state,
+          state: data.state.toUpperCase(),
           zip: data.zip,
           county: data.county || null,
+          country: data.country || 'US',
+          input_address: inputAddress,
           property_type: data.property_type,
           unit_count: data.unit_count,
           year_built: data.year_built || null,
@@ -249,14 +269,50 @@ export default function NewPropertyPage() {
             {/* ---- Address ---- */}
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold text-slate-700">Address</h3>
+                <h3 className="text-sm font-semibold text-slate-700">Property Address</h3>
                 <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] text-blue-700">
                   Live data coverage: Philadelphia, PA
                 </span>
               </div>
 
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="country">Country</Label>
+                  <select
+                    id="country"
+                    {...register('country')}
+                    disabled
+                    className="h-8 w-full rounded-lg border border-input bg-slate-50 px-2.5 text-sm outline-none text-slate-500"
+                  >
+                    <option value="US">United States</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Currently serving the contiguous United States
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="state">State *</Label>
+                  <select
+                    id="state"
+                    {...register('state')}
+                    className={`h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 ${errCls('state')}`}
+                  >
+                    <option value="">Select state...</option>
+                    {CONTIGUOUS_US_STATES.map((s) => (
+                      <option key={s.code} value={s.code}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.state && (
+                    <p className="text-xs text-red-600">{errors.state.message}</p>
+                  )}
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <Label htmlFor="address_line1">Street Address</Label>
+                <Label htmlFor="address_line1">Street Address *</Label>
                 <Input
                   id="address_line1"
                   placeholder="123 Main St"
@@ -279,12 +335,12 @@ export default function NewPropertyPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <div className="col-span-2 space-y-2 sm:col-span-1">
-                  <Label htmlFor="city">City</Label>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="city">City *</Label>
                   <Input
                     id="city"
-                    placeholder="Philadelphia"
+                    placeholder="e.g. Philadelphia"
                     {...register('city')}
                     className={errCls('city')}
                   />
@@ -294,20 +350,7 @@ export default function NewPropertyPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="state">State</Label>
-                  <Input
-                    id="state"
-                    placeholder="PA"
-                    {...register('state')}
-                    className={errCls('state')}
-                  />
-                  {errors.state && (
-                    <p className="text-xs text-red-600">{errors.state.message}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="zip">ZIP Code</Label>
+                  <Label htmlFor="zip">ZIP Code *</Label>
                   <Input
                     id="zip"
                     placeholder="19103"
@@ -452,7 +495,7 @@ export default function NewPropertyPage() {
                 disabled={isLoading}
                 className="bg-[#0f172a] text-white hover:bg-[#1e293b]"
               >
-                {isLoading ? 'Adding Property…' : 'Add Property'}
+                {isLoading ? 'Adding Property\u2026' : 'Add Property'}
               </Button>
               <Link href="/properties" className={buttonVariants({ variant: "outline" })}>Cancel</Link>
             </div>

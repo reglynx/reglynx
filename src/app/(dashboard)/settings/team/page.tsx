@@ -78,7 +78,7 @@ export default async function TeamPage() {
               variant="outline"
               size="sm"
               disabled
-              title="Coming soon"
+              title="Team invitations available on Professional and Enterprise plans"
             >
               <UserPlus className="mr-1.5 h-3.5 w-3.5" />
               Invite Member
@@ -93,7 +93,7 @@ export default async function TeamPage() {
                 No team members yet. You are the only user.
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Team invitations are coming soon.
+                Team invitations are available on Professional and Enterprise plans.
               </p>
             </div>
           ) : (

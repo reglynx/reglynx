@@ -8,7 +8,9 @@ import {
   ENTITY_TYPES,
   PROPERTY_TYPES,
   SUBSCRIPTION_PLANS,
-  JURISDICTIONS,
+  CONTIGUOUS_US_STATES,
+  isStateSupported,
+  COVERAGE_MESSAGES,
 } from '@/lib/constants';
 import {
   Card,
@@ -47,9 +49,7 @@ interface PropertyData {
 }
 
 interface JurisdictionData {
-  federal: boolean;
-  PA: boolean;
-  Philadelphia_PA: boolean;
+  [key: string]: boolean;
 }
 
 const STEPS = [
@@ -83,7 +83,7 @@ export default function OnboardingPage() {
     name: '',
     address_line1: '',
     city: '',
-    state: 'PA',
+    state: '',
     zip: '',
     property_type: 'residential_multifamily',
     year_built: '',
@@ -181,6 +181,22 @@ export default function OnboardingPage() {
       setError('Property name and address are required');
       return;
     }
+    if (!property.city.trim()) {
+      setError('City is required');
+      return;
+    }
+    if (!property.state) {
+      setError('Please select a state');
+      return;
+    }
+    if (!property.zip.trim()) {
+      setError('ZIP code is required');
+      return;
+    }
+    if (!isStateSupported(property.state)) {
+      setError(COVERAGE_MESSAGES.unsupported);
+      return;
+    }
     if (!orgId) {
       setError('Organization not found. Please go back to step 1.');
       return;
@@ -192,15 +208,24 @@ export default function OnboardingPage() {
     try {
       const supabase = createClient();
 
+      const inputAddress = [
+        property.address_line1.trim(),
+        property.city.trim(),
+        property.state,
+        property.zip.trim(),
+      ].filter(Boolean).join(', ');
+
       const { error: insertError } = await supabase
         .from('properties')
         .insert({
           org_id: orgId,
           name: property.name.trim(),
           address_line1: property.address_line1.trim(),
-          city: property.city.trim() || 'Philadelphia',
-          state: property.state || 'PA',
+          city: property.city.trim(),
+          state: property.state.toUpperCase(),
           zip: property.zip.trim(),
+          country: 'US',
+          input_address: inputAddress,
           property_type: property.property_type,
           unit_count: 1,
           year_built: property.year_built
@@ -249,6 +274,12 @@ export default function OnboardingPage() {
         setIsLoading(false);
         return;
       }
+
+      // Set onboarding_complete flag in user metadata
+      const supabase = createClient();
+      await supabase.auth.updateUser({
+        data: { onboarding_complete: true },
+      });
 
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
@@ -440,12 +471,30 @@ export default function OnboardingPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              <div className="col-span-2 space-y-2 sm:col-span-1">
-                <Label htmlFor="city">City</Label>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="state">State *</Label>
+                <select
+                  id="state"
+                  value={property.state}
+                  onChange={(e) =>
+                    setProperty({ ...property, state: e.target.value })
+                  }
+                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  <option value="">Select state...</option>
+                  {CONTIGUOUS_US_STATES.map((s) => (
+                    <option key={s.code} value={s.code}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="city">City *</Label>
                 <Input
                   id="city"
-                  placeholder="Philadelphia"
+                  placeholder="e.g. Philadelphia"
                   value={property.city}
                   onChange={(e) =>
                     setProperty({ ...property, city: e.target.value })
@@ -453,17 +502,7 @@ export default function OnboardingPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="state">State</Label>
-                <Input
-                  id="state"
-                  value={property.state}
-                  onChange={(e) =>
-                    setProperty({ ...property, state: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="zip">ZIP</Label>
+                <Label htmlFor="zip">ZIP *</Label>
                 <Input
                   id="zip"
                   placeholder="19103"
@@ -586,51 +625,109 @@ export default function OnboardingPage() {
       {step === 3 && (
         <Card>
           <CardHeader>
-            <CardTitle>Select Jurisdictions</CardTitle>
+            <CardTitle>Compliance Coverage</CardTitle>
             <CardDescription>
-              Choose the jurisdictions relevant to your properties. More states
-              coming soon.
+              RegLynx monitors regulatory requirements across federal, state, and
+              local jurisdictions. Coverage below reflects the jurisdictions
+              relevant to the property you entered.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-3">
-              {(
-                Object.entries(JURISDICTIONS) as [
-                  string,
-                  { label: string; type: string },
-                ][]
-              ).map(([key, value]) => (
-                <label
-                  key={key}
-                  className="flex items-center gap-3 rounded-lg border p-4 transition-colors hover:bg-slate-50"
-                >
+              {/* Federal — always active */}
+              <label className="flex items-center gap-3 rounded-lg border p-4 transition-colors hover:bg-slate-50">
+                <input
+                  type="checkbox"
+                  checked={jurisdictions.federal ?? true}
+                  onChange={(e) =>
+                    setJurisdictions({
+                      ...jurisdictions,
+                      federal: e.target.checked,
+                    })
+                  }
+                  className="size-4 rounded border-slate-300"
+                />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Federal</p>
+                  <p className="text-xs text-muted-foreground">
+                    Fair Housing, Lead-Based Paint Disclosure, ADA, OSHA
+                  </p>
+                </div>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                  Active
+                </span>
+              </label>
+
+              {/* State — based on property */}
+              {property.state && (
+                <label className="flex items-center gap-3 rounded-lg border p-4 transition-colors hover:bg-slate-50">
                   <input
                     type="checkbox"
-                    checked={
-                      jurisdictions[key as keyof JurisdictionData] ?? false
-                    }
+                    checked={jurisdictions[property.state] ?? true}
                     onChange={(e) =>
                       setJurisdictions({
                         ...jurisdictions,
-                        [key]: e.target.checked,
+                        [property.state]: e.target.checked,
                       })
                     }
                     className="size-4 rounded border-slate-300"
                   />
-                  <div>
-                    <p className="text-sm font-medium">{value.label}</p>
-                    <p className="text-xs text-muted-foreground capitalize">
-                      {value.type} regulations
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">
+                      {CONTIGUOUS_US_STATES.find((s) => s.code === property.state)?.name || property.state}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      State-level landlord-tenant regulations
                     </p>
                   </div>
+                  <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
+                    property.state === 'PA'
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-amber-50 text-amber-700'
+                  }`}>
+                    {property.state === 'PA' ? 'Active' : 'Pending'}
+                  </span>
                 </label>
-              ))}
+              )}
+
+              {/* Local — Philadelphia detection */}
+              {property.state === 'PA' && property.city.toLowerCase().includes('philadelphia') && (
+                <label className="flex items-center gap-3 rounded-lg border p-4 transition-colors hover:bg-slate-50">
+                  <input
+                    type="checkbox"
+                    checked={jurisdictions.Philadelphia_PA ?? true}
+                    onChange={(e) =>
+                      setJurisdictions({
+                        ...jurisdictions,
+                        Philadelphia_PA: e.target.checked,
+                      })
+                    }
+                    className="size-4 rounded border-slate-300"
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Philadelphia, PA</p>
+                    <p className="text-xs text-muted-foreground">
+                      Rental license, lead-safe certification, L&I monitoring
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700">
+                    Active
+                  </span>
+                </label>
+              )}
             </div>
 
-            <p className="text-xs text-muted-foreground italic">
-              More states coming soon. Currently supporting Pennsylvania and
-              Philadelphia local regulations.
-            </p>
+            {property.state && property.state !== 'PA' && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                <p className="font-medium">Coverage pending</p>
+                <p className="mt-1 text-xs text-amber-600">
+                  Property intake is available for all contiguous U.S. states.
+                  Compliance monitoring adapters for{' '}
+                  {CONTIGUOUS_US_STATES.find((s) => s.code === property.state)?.name || property.state}{' '}
+                  are being developed. You will be notified when local coverage goes live.
+                </p>
+              </div>
+            )}
 
             <div className="flex justify-between pt-2">
               <Button

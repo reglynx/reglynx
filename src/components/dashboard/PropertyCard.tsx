@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Building2, MapPin, Calendar, Home } from 'lucide-react';
+import { Building2, MapPin, Calendar, Home, Archive } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PROPERTY_TYPES } from '@/lib/constants';
@@ -7,9 +7,10 @@ import type { Property } from '@/lib/types';
 
 interface PropertyCardProps {
   property: Property;
+  showArchived?: boolean;
 }
 
-export function PropertyCard({ property }: PropertyCardProps) {
+export function PropertyCard({ property, showArchived }: PropertyCardProps) {
   const typeLabel =
     PROPERTY_TYPES[property.property_type as keyof typeof PROPERTY_TYPES] ??
     property.property_type;
@@ -55,6 +56,12 @@ export function PropertyCard({ property }: PropertyCardProps) {
               <span className="flex items-center gap-1">
                 <Calendar className="size-3" />
                 Built {property.year_built}
+              </span>
+            )}
+            {showArchived && property.archived_at && (
+              <span className="flex items-center gap-1 text-amber-600">
+                <Archive className="size-3" />
+                Archived
               </span>
             )}
           </div>
