@@ -402,7 +402,7 @@ export default async function ComplianceReportPage({
             Items marked &ldquo;Demo Data&rdquo; or &ldquo;Pending Verification&rdquo; require
             manual confirmation. This report is not legal advice.
           </p>
-          <p>RegLynx — Ramesses Management &amp; Contracting LLC · 1700 Market St. Suite 1005, Philadelphia PA 19103</p>
+          <p>RegLynx — RCCHM Consulting Group · 1700 Market St. Suite 1005, Philadelphia PA 19103</p>
         </footer>
       </article>
     </div>
