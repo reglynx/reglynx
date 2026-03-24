@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Logo } from '@/components/shared/Logo';
 
 export const metadata = {
-  title: 'Terms of Service — RegLynx',
+  title: 'Terms of Service â RegLynx',
 };
 
 export default function TermsPage() {
@@ -28,7 +28,7 @@ export default function TermsPage() {
             </h2>
             <p className="mt-2">
               By accessing or using RegLynx (&quot;Service&quot;), a product of
-              Ramesses Management &amp; Contracting LLC (&quot;Company&quot;,
+              RCCHM Consulting Group (&quot;Company&quot;,
               &quot;we&quot;, &quot;us&quot;), you agree to be bound by these
               Terms of Service. If you do not agree to these terms, do not use
               the Service.
@@ -111,8 +111,7 @@ export default function TermsPage() {
               Documents generated through the Service are based on publicly
               available regulations. You retain ownership of any customized
               content you input. The Service itself, including its design,
-              functionality, and branding, remains the property of Ramesses
-              Management &amp; Contracting LLC.
+              functionality, and branding, remains the property of RCCHM Consulting Group.
             </p>
           </section>
 
@@ -121,8 +120,7 @@ export default function TermsPage() {
               7. Limitation of Liability
             </h2>
             <p className="mt-2">
-              To the maximum extent permitted by law, Ramesses Management &amp;
-              Contracting LLC shall not be liable for any indirect, incidental,
+              To the maximum extent permitted by law, RCCHM Consulting Group shall not be liable for any indirect, incidental,
               special, consequential, or punitive damages, including but not
               limited to loss of profits, data, or business opportunities,
               arising from your use of or inability to use the Service.
@@ -154,7 +152,7 @@ export default function TermsPage() {
               </a>
             </p>
             <p className="mt-1">
-              Ramesses Management &amp; Contracting LLC
+              RCCHM Consulting Group
               <br />
               1700 Market St. Suite 1005, Philadelphia, PA 19103
             </p>
