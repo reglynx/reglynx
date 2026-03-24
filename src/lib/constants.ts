@@ -16,7 +16,7 @@ export const DOCUMENT_TYPES = {
   },
   ada_policy: {
     label: 'ADA Compliance Policy',
-    category: 'federal' as const,
+    category: 'federal' as const
     description: 'Americans with Disabilities Act compliance policy',
   },
   landlord_tenant_rights: {
@@ -264,7 +264,7 @@ or accuracy of regulatory information. Use of this template is at
 your own risk.
 
 RegLynx | reglynx.com | support@reglynx.com
-Ramesses Management & Contracting LLC | Philadelphia, PA`;
+RCCHM Consulting Group | Philadelphia, PA`;
 
 export const FOOTER_LEGAL_LINE =
   'RegLynx is not a law firm and does not provide legal advice. All generated document templates should be reviewed by qualified counsel before implementation.';
