@@ -176,47 +176,43 @@ export default async function DashboardPage({
     .eq('owner_id', user.id)
     .maybeSingle<Organization>();
 
-  if (!org) redirect('/onboarding');
+  if (!org) {
+    return <div>No organization found. <a href="/onboarding">Complete onboarding</a></div>;
+  }
 
-  // Parallel data fetches
-  const [propertiesRes, documentsRes, alertsRes, auditRes, snapshotRes] = await Promise.all([
-    supabase
-      .from('properties')
-      .select('*')
-      .eq('org_id', org.id)
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('documents')
-      .select('*')
-      .eq('org_id', org.id)
-      .order('updated_at', { ascending: false }),
-    supabase
-      .from('org_alerts')
-      .select('*, alert:regulatory_alerts(*)')
-      .eq('org_id', org.id)
-      .order('created_at', { ascending: false })
-      .limit(5),
-    supabase
-      .from('audit_log')
-      .select('*')
-      .eq('org_id', org.id)
-      .order('created_at', { ascending: false })
-      .limit(10),
-    supabase
-      .from('status_snapshots')
-      .select('property_id')
-      .eq('org_id', org.id)
-      .limit(1),
+  // Parallel data fetches — each error is logged but never crashes render
+  const [propertiesRes, documentsRes, alertsRes, auditRes] = await Promise.all([
+    supabase.from('properties').select('*').eq('org_id', org.id),
+    supabase.from('documents').select('*').eq('org_id', org.id),
+    supabase.from('org_alerts').select('*, alert:regulatory_alerts(*)').eq('org_id', org.id),
+    supabase.from('audit_log').select('*').eq('org_id', org.id),
   ]);
+
+  if (propertiesRes.error) console.error('properties error', propertiesRes.error);
+  if (documentsRes.error) console.error('documents error', documentsRes.error);
+  if (alertsRes.error) console.error('alerts error', alertsRes.error);
+  if (auditRes.error) console.error('audit error', auditRes.error);
 
   // Filter out archived properties from active dashboard
   const properties: Property[] = (propertiesRes.data ?? []).filter(
     (p: Property) => !p.archived_at
   );
   const documents: Document[] = documentsRes.data ?? [];
-  const orgAlerts: (OrgAlert & { alert: RegulatoryAlert })[] = alertsRes.data ?? [];
-  const auditEntries: AuditLogEntry[] = auditRes.data ?? [];
-  const hasComplianceSnapshot = (snapshotRes.data ?? []).length > 0;
+  const alerts: (OrgAlert & { alert: RegulatoryAlert })[] = alertsRes.data ?? [];
+  const auditLog: AuditLogEntry[] = auditRes.data ?? [];
+
+  // status_snapshots isolated — failure must never block dashboard render
+  let hasComplianceSnapshot = false;
+  try {
+    const snapshotRes = await supabase
+      .from('status_snapshots')
+      .select('property_id')
+      .eq('org_id', org.id)
+      .limit(1);
+    hasComplianceSnapshot = (snapshotRes.data ?? []).length > 0;
+  } catch (e) {
+    console.error('status_snapshots error', e);
+  }
 
   // Compute metrics
   const { score: complianceScore, totalRequired, totalCurrent } =
@@ -388,11 +384,11 @@ export default async function DashboardPage({
               View all <ExternalLink className="size-3" />
             </Link>
           </div>
-          {orgAlerts.length === 0 ? (
+          {alerts.length === 0 ? (
             <p className="text-sm text-muted-foreground">No active issues found in monitored sources.</p>
           ) : (
             <div className="space-y-3">
-              {orgAlerts.map((a) => (
+              {alerts.map((a) => (
                 <AlertCard key={a.id} alert={a} />
               ))}
             </div>
@@ -424,19 +420,19 @@ export default async function DashboardPage({
       </div>
 
       {/* Activity Timeline */}
-      {auditEntries.length > 0 && (
+      {auditLog.length > 0 && (
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">Recent Activity</h2>
           <Card>
             <CardContent className="py-4">
               <ol className="space-y-4">
-                {auditEntries.map((entry, i) => (
+                {auditLog.map((entry, i) => (
                   <li key={entry.id} className="flex items-start gap-3">
                     <div className="flex flex-col items-center">
                       <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100">
                         <Clock className="size-3.5 text-slate-500" />
                       </div>
-                      {i < auditEntries.length - 1 && (
+                      {i < auditLog.length - 1 && (
                         <div className="mt-1 h-full w-px bg-slate-200" style={{ minHeight: 16 }} />
                       )}
                     </div>
