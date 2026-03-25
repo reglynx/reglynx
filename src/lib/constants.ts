@@ -16,7 +16,7 @@ export const DOCUMENT_TYPES = {
   },
   ada_policy: {
     label: 'ADA Compliance Policy',
-    category: 'federal' as const
+    category: 'federal' as const,
     description: 'Americans with Disabilities Act compliance policy',
   },
   landlord_tenant_rights: {
