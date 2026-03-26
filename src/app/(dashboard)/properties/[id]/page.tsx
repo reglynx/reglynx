@@ -19,7 +19,7 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { buttonVariants } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button-variants';
 import { DocumentCard } from '@/components/dashboard/DocumentCard';
 import { PropertyNotesEditor } from '@/components/dashboard/PropertyNotesEditor';
 import { PROPERTY_TYPES, DOCUMENT_TYPES, COVERAGE_MESSAGES } from '@/lib/constants';
@@ -65,40 +65,73 @@ export default async function PropertyDetailPage({
   if (!user) redirect('/login');
 
   // Fetch org
-  const { data: org } = await supabase
-    .from('organizations')
-    .select('*')
-    .eq('owner_id', user.id)
-    .maybeSingle<Organization>();
+  let org: Organization | null = null;
+  try {
+    const { data } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('owner_id', user.id)
+      .maybeSingle<Organization>();
+    org = data;
+  } catch (e) {
+    console.error('Failed to fetch organization:', e);
+  }
 
   if (!org) redirect('/onboarding');
 
   // Fetch property (scoped to org for safety)
-  const { data: property } = await supabase
-    .from('properties')
-    .select('*')
-    .eq('id', id)
-    .eq('org_id', org.id)
-    .single<Property>();
+  let property: Property | null = null;
+  try {
+    const { data } = await supabase
+      .from('properties')
+      .select('*')
+      .eq('id', id)
+      .eq('org_id', org.id)
+      .maybeSingle<Property>();
+    property = data;
+  } catch (e) {
+    console.error('Failed to fetch property:', e);
+  }
 
   if (!property) notFound();
 
   // Get jurisdiction coverage
-  const coverage = await getCoverage(
-    property.state,
-    property.city?.toLowerCase() === 'philadelphia' && property.state === 'PA'
-      ? 'Philadelphia'
-      : undefined,
-  );
+  let coverage: {
+    status: string;
+    message: string;
+    intakeEnabled: boolean;
+    billingEnabled: boolean;
+    waitlistEnabled: boolean;
+  } = {
+    status: 'pending',
+    message: COVERAGE_MESSAGES.pending,
+    intakeEnabled: true,
+    billingEnabled: false,
+    waitlistEnabled: false,
+  };
+  try {
+    coverage = await getCoverage(
+      property.state,
+      property.city?.toLowerCase() === 'philadelphia' && property.state === 'PA'
+        ? 'Philadelphia'
+        : undefined,
+    );
+  } catch (e) {
+    console.error('Failed to get coverage:', e);
+  }
 
   // Fetch documents for this property
-  const { data: documents } = await supabase
-    .from('documents')
-    .select('*')
-    .eq('property_id', property.id)
-    .order('updated_at', { ascending: false });
-
-  const docList: Document[] = documents ?? [];
+  let docList: Document[] = [];
+  try {
+    const { data: documents } = await supabase
+      .from('documents')
+      .select('*')
+      .eq('property_id', property.id)
+      .order('updated_at', { ascending: false });
+    docList = (documents ?? []) as Document[];
+  } catch (e) {
+    console.error('Failed to fetch documents:', e);
+  }
 
   // Required vs existing doc types
   const requiredTypes = getRequiredDocTypes(property);
