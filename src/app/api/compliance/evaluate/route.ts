@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       .from('organizations')
       .select('id')
       .eq('owner_id', user.id)
-      .single<Pick<Organization, 'id'>>();
+      .maybeSingle<Pick<Organization, 'id'>>();
 
     if (!org) return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
 
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       .select('id, address_line1, city, state')
       .eq('id', property_id)
       .eq('org_id', org.id)
-      .single();
+      .maybeSingle();
 
     if (!property) {
       return NextResponse.json({ error: 'Property not found' }, { status: 404 });

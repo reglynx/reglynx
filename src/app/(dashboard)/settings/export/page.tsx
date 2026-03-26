@@ -29,7 +29,7 @@ export default function ExportPage() {
         .from('organizations')
         .select('id, name')
         .eq('owner_id', user.id)
-        .single();
+        .maybeSingle();
       if (!org) return;
 
       const { data: docs } = await supabase
@@ -76,7 +76,7 @@ export default function ExportPage() {
         .from('organizations')
         .select('id, name')
         .eq('owner_id', user.id)
-        .single();
+        .maybeSingle();
       if (!org) return;
 
       const [{ data: properties }, { data: docs }] = await Promise.all([

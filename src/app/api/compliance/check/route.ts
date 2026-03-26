@@ -33,7 +33,7 @@ export async function POST(request: Request) {
       .from('properties')
       .select('*')
       .eq('id', propertyId)
-      .single();
+      .maybeSingle();
 
     if (propError || !property) {
       return NextResponse.json({ error: 'Property not found' }, { status: 404 });

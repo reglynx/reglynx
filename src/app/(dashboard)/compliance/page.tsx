@@ -11,21 +11,31 @@ export default async function ComplianceIndexPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: org } = await supabase
-    .from('organizations')
-    .select('*')
-    .eq('owner_id', user.id)
-    .maybeSingle<Organization>();
+  let org: Organization | null = null;
+  try {
+    const { data } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('owner_id', user.id)
+      .maybeSingle<Organization>();
+    org = data;
+  } catch (e) {
+    console.error('Failed to fetch organization:', e);
+  }
 
   if (!org) redirect('/onboarding');
 
-  const { data: properties } = await supabase
-    .from('properties')
-    .select('*')
-    .eq('org_id', org.id)
-    .order('created_at', { ascending: false });
-
-  const props: Property[] = properties ?? [];
+  let props: Property[] = [];
+  try {
+    const { data: properties } = await supabase
+      .from('properties')
+      .select('*')
+      .eq('org_id', org.id)
+      .order('created_at', { ascending: false });
+    props = (properties ?? []) as Property[];
+  } catch (e) {
+    console.error('Failed to fetch properties:', e);
+  }
 
   if (props.length === 1) {
     redirect(`/compliance/${props[0].id}`);

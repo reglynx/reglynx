@@ -41,7 +41,7 @@ export function DownloadDisclaimerModal({
           .from('organizations')
           .select('id')
           .eq('owner_id', user.id)
-          .single();
+          .maybeSingle();
 
         if (org) {
           await supabase.from('audit_log').insert({

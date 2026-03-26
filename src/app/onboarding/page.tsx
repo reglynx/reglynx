@@ -133,7 +133,7 @@ export default function OnboardingPage() {
         .from('organizations')
         .select('id')
         .eq('owner_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (existingOrg) {
         setOrgId(existingOrg.id);
@@ -281,6 +281,12 @@ export default function OnboardingPage() {
         data: { onboarding_complete: true },
       });
 
+      // If plan has no priceId (Stripe not configured), go straight to dashboard in trial mode
+      if (!plan.priceId) {
+        router.push('/dashboard');
+        return;
+      }
+
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -290,6 +296,11 @@ export default function OnboardingPage() {
       const data = await response.json();
 
       if (!response.ok) {
+        // If billing is not configured (503), redirect to dashboard in trial mode
+        if (response.status === 503) {
+          router.push('/dashboard');
+          return;
+        }
         setError(data.error || 'Failed to create checkout session');
         setIsLoading(false);
         return;
@@ -297,6 +308,9 @@ export default function OnboardingPage() {
 
       if (data.url) {
         window.location.href = data.url;
+      } else {
+        // No checkout URL returned — go to dashboard
+        router.push('/dashboard');
       }
     } catch {
       setError('An unexpected error occurred');

@@ -90,7 +90,7 @@ export async function GET(request: Request) {
               .from('organizations')
               .select('owner_id, name')
               .eq('id', property.org_id)
-              .single();
+              .maybeSingle();
 
             if (org) {
               const { data: userData } = await supabase.auth.admin.getUserById(org.owner_id);

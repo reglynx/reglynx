@@ -16,7 +16,7 @@ export async function PATCH(
     .from('organizations')
     .select('id')
     .eq('owner_id', user.id)
-    .single();
+    .maybeSingle();
 
   if (!org) return NextResponse.json({ error: 'Org not found' }, { status: 404 });
 

@@ -57,7 +57,7 @@ export async function POST(request: Request) {
       .from('organizations')
       .select('*')
       .eq('owner_id', user.id)
-      .single<Organization>();
+      .maybeSingle<Organization>();
 
     if (orgError || !org) {
       return NextResponse.json(

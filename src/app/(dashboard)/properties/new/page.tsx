@@ -121,7 +121,7 @@ export default function NewPropertyPage() {
         .from('organizations')
         .select('id')
         .eq('owner_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (orgError || !org) {
         setError('Could not find your organization. Please complete onboarding first.');
@@ -144,7 +144,7 @@ export default function NewPropertyPage() {
           .from('organizations')
           .select('subscription_plan, subscription_status')
           .eq('owner_id', user.id)
-          .single(),
+          .maybeSingle(),
       ]);
 
       const planKey = (orgData?.subscription_plan ?? 'starter') as SubscriptionPlan;

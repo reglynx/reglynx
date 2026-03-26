@@ -152,6 +152,39 @@ function buildPilotChecklist(
 }
 
 // ---------------------------------------------------------------------------
+// Fallback UI shown when database queries fail
+// ---------------------------------------------------------------------------
+
+function DashboardFallback() {
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-muted-foreground">Welcome to RegLynx!</p>
+      </div>
+      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
+          <Building2 className="size-6 text-slate-400" />
+        </div>
+        <h3 className="text-base font-semibold text-slate-900">
+          Your compliance dashboard is being set up.
+        </h3>
+        <p className="mt-1 max-w-sm text-sm text-slate-500">
+          Add your first property to get started with compliance monitoring.
+        </p>
+        <Link
+          href="/properties/new"
+          className={buttonVariants({ variant: 'default', className: 'mt-6' })}
+        >
+          <Plus className="size-4" />
+          Add Property
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -170,39 +203,54 @@ export default async function DashboardPage({
   if (!user) redirect('/login');
 
   // Fetch organization
-  const { data: org } = await supabase
-    .from('organizations')
-    .select('*')
-    .eq('owner_id', user.id)
-    .maybeSingle<Organization>();
-
-  if (!org) {
-    return <div>No organization found. <a href="/onboarding">Complete onboarding</a></div>;
+  let org: Organization | null = null;
+  try {
+    const { data } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('owner_id', user.id)
+      .maybeSingle<Organization>();
+    org = data;
+  } catch (e) {
+    console.error('Failed to fetch organization:', e);
   }
 
-  // Parallel data fetches — each error is logged but never crashes render
-  const [propertiesRes, documentsRes, alertsRes, auditRes] = await Promise.all([
-    supabase.from('properties').select('*').eq('org_id', org.id),
-    supabase.from('documents').select('*').eq('org_id', org.id),
-    supabase.from('org_alerts').select('*, alert:regulatory_alerts(*)').eq('org_id', org.id),
-    supabase.from('audit_log').select('*').eq('org_id', org.id),
-  ]);
+  if (!org) {
+    return <DashboardFallback />;
+  }
 
-  if (propertiesRes.error) console.error('properties error', propertiesRes.error);
-  if (documentsRes.error) console.error('documents error', documentsRes.error);
-  if (alertsRes.error) console.error('alerts error', alertsRes.error);
-  if (auditRes.error) console.error('audit error', auditRes.error);
+  // Parallel data fetches — wrapped in try/catch so missing tables never crash
+  let properties: Property[] = [];
+  let documents: Document[] = [];
+  let alerts: (OrgAlert & { alert: RegulatoryAlert })[] = [];
+  let auditLog: AuditLogEntry[] = [];
+  let hasComplianceSnapshot = false;
 
-  // Filter out archived properties from active dashboard
-  const properties: Property[] = (propertiesRes.data ?? []).filter(
-    (p: Property) => !p.archived_at
-  );
-  const documents: Document[] = documentsRes.data ?? [];
-  const alerts: (OrgAlert & { alert: RegulatoryAlert })[] = alertsRes.data ?? [];
-  const auditLog: AuditLogEntry[] = auditRes.data ?? [];
+  try {
+    const [propertiesRes, documentsRes, alertsRes, auditRes] = await Promise.all([
+      supabase.from('properties').select('*').eq('org_id', org.id),
+      supabase.from('documents').select('*').eq('org_id', org.id),
+      supabase.from('org_alerts').select('*, alert:regulatory_alerts(*)').eq('org_id', org.id),
+      supabase.from('audit_log').select('*').eq('org_id', org.id),
+    ]);
+
+    if (propertiesRes.error) console.error('properties error', propertiesRes.error);
+    if (documentsRes.error) console.error('documents error', documentsRes.error);
+    if (alertsRes.error) console.error('alerts error', alertsRes.error);
+    if (auditRes.error) console.error('audit error', auditRes.error);
+
+    properties = ((propertiesRes.data ?? []) as Property[]).filter(
+      (p) => !p.archived_at
+    );
+    documents = (documentsRes.data ?? []) as Document[];
+    alerts = (alertsRes.data ?? []) as (OrgAlert & { alert: RegulatoryAlert })[];
+    auditLog = (auditRes.data ?? []) as AuditLogEntry[];
+  } catch (e) {
+    console.error('Dashboard data fetch error (tables may be missing):', e);
+    return <DashboardFallback />;
+  }
 
   // status_snapshots isolated — failure must never block dashboard render
-  let hasComplianceSnapshot = false;
   try {
     const snapshotRes = await supabase
       .from('status_snapshots')

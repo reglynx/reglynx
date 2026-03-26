@@ -23,7 +23,7 @@ export async function PATCH(
       .from('organizations')
       .select('id')
       .eq('owner_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (!org) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
@@ -122,7 +122,7 @@ export async function DELETE(
       .from('organizations')
       .select('id')
       .eq('owner_id', user.id)
-      .single();
+      .maybeSingle();
 
     if (!org) {
       return NextResponse.json({ error: 'Organization not found' }, { status: 404 });

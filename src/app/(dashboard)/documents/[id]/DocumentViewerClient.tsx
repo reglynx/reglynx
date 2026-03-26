@@ -42,7 +42,7 @@ export function DocumentViewerClient({
         .from('organizations')
         .select('id')
         .eq('owner_id', userId)
-        .single();
+        .maybeSingle();
 
       if (org) {
         await supabase.from('audit_log').insert({
