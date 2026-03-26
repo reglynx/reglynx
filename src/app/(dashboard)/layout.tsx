@@ -42,7 +42,7 @@ export default async function DashboardLayout({
 
       {/* Main content area (offset by sidebar width on md+) */}
       <div className="flex flex-1 flex-col md:pl-[240px]">
-        <Topbar org={org} userEmail={user.email} />
+        <Topbar org={org} userEmail={user.email ?? ''} />
 
         <main className="flex-1 overflow-y-auto bg-slate-50 p-6">
           {children}

@@ -39,7 +39,7 @@ function GenerateDocumentForm() {
         .from('organizations')
         .select('id')
         .eq('owner_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (!org) return;
 

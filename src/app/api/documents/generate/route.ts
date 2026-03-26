@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       .from('organizations')
       .select('*')
       .eq('owner_id', user.id)
-      .single<Organization>();
+      .maybeSingle<Organization>();
 
     if (!org) {
       return NextResponse.json(
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       .eq('document_type', document_type)
       .eq('jurisdiction', jurisdiction)
       .eq('is_active', true)
-      .single<DocumentTemplate>();
+      .maybeSingle<DocumentTemplate>();
 
     if (templateError || !template) {
       return NextResponse.json(
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
         .select('*')
         .eq('id', property_id)
         .eq('org_id', org.id)
-        .single<Property>();
+        .maybeSingle<Property>();
 
       if (!prop) {
         return NextResponse.json(

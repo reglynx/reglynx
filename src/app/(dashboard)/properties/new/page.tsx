@@ -121,7 +121,7 @@ export default function NewPropertyPage() {
         .from('organizations')
         .select('id')
         .eq('owner_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (orgError || !org) {
         setError('Could not find your organization. Please complete onboarding first.');
