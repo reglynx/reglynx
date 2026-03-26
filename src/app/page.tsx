@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Logo } from '@/components/shared/Logo';
 import { FOOTER_LEGAL_LINE } from '@/lib/constants';
 import WhyRegLynx from '@/components/landing/WhyRegLynx';
+import { AddressSearch } from '@/components/landing/AddressSearch';
 import {
   FileText,
   Bell,
@@ -12,52 +13,70 @@ import {
   Shield,
   ArrowRight,
   Check,
+  AlertTriangle,
+  ShieldCheck,
 } from 'lucide-react';
 
 const features = [
   {
-    icon: FileText,
-    title: 'Document Template Drafting',
+    icon: ShieldCheck,
+    title: 'Live Compliance Monitoring',
     description:
-      'Generate jurisdiction-specific compliance document templates in seconds. Fair Housing policies, OSHA checklists, lead disclosures, and more.',
+      'Pulls L&I violations, rental license status, and permit data directly from Philadelphia Open Data. Know your risk before the city does.',
+  },
+  {
+    icon: FileText,
+    title: 'AI Document Generation',
+    description:
+      'Generate Fair Housing policies, lead disclosures, OSHA plans, and more — drafted from verified regulatory citations, ready for counsel review.',
   },
   {
     icon: Bell,
-    title: 'Regulatory Change Monitoring',
+    title: 'Regulatory Alerts',
     description:
-      'Stay informed when regulations change. Get alerts when your document templates may need updating based on new rules.',
+      'Get notified when regulations change that affect your properties. Never miss a compliance deadline or new requirement.',
   },
   {
-    icon: MapPin,
-    title: 'Multi-Jurisdiction Coverage',
+    icon: AlertTriangle,
+    title: 'Fine Exposure Tracking',
     description:
-      'Federal, state, and local requirements in one place. Templates account for jurisdiction-specific requirements and protected classes.',
+      'See your estimated fine exposure across all properties. Prioritize which violations to address first based on financial risk.',
   },
   {
     icon: ClipboardList,
-    title: 'Full Audit Trail',
+    title: 'Compliance Audit Trail',
     description:
-      'Track every document generated, reviewed, and downloaded. Demonstrate your compliance efforts with a complete history.',
-  },
-  {
-    icon: Users,
-    title: 'Team Access',
-    description:
-      'Invite your compliance team, property managers, and leadership. Role-based access keeps everyone aligned.',
+      'Every document, check, and action is logged. Demonstrate due diligence with a complete compliance history.',
   },
   {
     icon: Download,
-    title: 'PDF Export',
+    title: 'Reports & Export',
     description:
-      'Download draft documents as professionally formatted PDFs, ready for your legal counsel to review and approve.',
+      'Generate compliance reports per property. Export documents as PDF. Share with investors, auditors, or counsel.',
   },
 ];
 
 const plans = [
   {
+    name: 'Philadelphia Pilot',
+    price: 49,
+    popular: true,
+    description: 'Live compliance monitoring for Philadelphia rental properties.',
+    features: [
+      'Up to 5 properties',
+      'Live L&I violation monitoring',
+      'Rental license tracking',
+      'Daily compliance evaluation',
+      '20 AI document drafts/month',
+      'Email alerts for critical issues',
+      'Compliance reports',
+      'Priority pilot support',
+    ],
+  },
+  {
     name: 'Starter',
     price: 147,
-    description: 'For small property managers getting started with compliance.',
+    description: 'Document generation for property managers in any state.',
     features: [
       'Up to 5 properties',
       '10 document drafts/month',
@@ -69,29 +88,14 @@ const plans = [
   {
     name: 'Professional',
     price: 297,
-    popular: true,
-    description: 'For growing companies that need full jurisdiction coverage.',
+    description: 'Full coverage for growing portfolios.',
     features: [
       'Up to 25 properties',
       'Unlimited document drafts',
-      'Federal + all states + local',
-      'Priority alerts',
-      'PDF export',
-      'Team access (up to 5)',
-    ],
-  },
-  {
-    name: 'Enterprise',
-    price: 597,
-    description: 'For large operators and management companies.',
-    features: [
-      'Unlimited properties',
-      'Unlimited document drafts',
       'All jurisdictions',
-      'White-label option',
-      'API access',
-      'Dedicated support',
-      'Unlimited team members',
+      'Priority alerts',
+      'Team access (up to 5)',
+      'PDF export',
     ],
   },
 ];
@@ -106,28 +110,16 @@ export default function LandingPage() {
             <Logo size="sm" />
 
             <div className="hidden md:flex items-center gap-8">
-              <a
-                href="#features"
-                className="text-sm text-slate-600 hover:text-slate-900"
-              >
+              <a href="#features" className="text-sm text-slate-600 hover:text-slate-900">
                 Features
               </a>
-              <a
-                href="#why-reglynx"
-                className="text-sm text-slate-600 hover:text-emerald-600 font-medium transition-colors"
-              >
+              <a href="#why-reglynx" className="text-sm text-slate-600 hover:text-emerald-600 font-medium transition-colors">
                 Why RegLynx?
               </a>
-              <a
-                href="#pricing"
-                className="text-sm text-slate-600 hover:text-slate-900"
-              >
+              <a href="#pricing" className="text-sm text-slate-600 hover:text-slate-900">
                 Pricing
               </a>
-              <a
-                href="mailto:hello@reglynx.com"
-                className="text-sm text-slate-600 hover:text-slate-900"
-              >
+              <a href="mailto:hello@reglynx.com" className="text-sm text-slate-600 hover:text-slate-900">
                 Contact
               </a>
             </div>
@@ -151,29 +143,26 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero */}
-      <section className="pt-20 pb-24 px-4 sm:px-6 lg:px-8">
+      <section className="pt-16 pb-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium mb-8">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium mb-6">
             <Shield className="w-3.5 h-3.5" />
-            Compliance document templates for property managers
+            Now live: Philadelphia rental property compliance monitoring
           </div>
 
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-[#0f172a] leading-tight tracking-tight">
-            Stop Paying Lawyers $3,000{' '}
-            <span className="text-slate-400">For First Drafts.</span>
+            Know Your Property&apos;s{' '}
+            <span className="text-emerald-600">Compliance Risk</span>{' '}
+            <span className="text-slate-400">Before the City Does.</span>
           </h1>
 
-          <h2 className="text-xl sm:text-2xl text-[#0f172a] font-semibold mt-4">
-            Generate Compliance Document Templates in 30 Seconds.
-          </h2>
-
-          <p className="text-lg text-[#334155] mt-6 max-w-2xl mx-auto leading-relaxed">
-            RegLynx monitors regulatory changes and drafts jurisdiction-specific
-            compliance document templates for property managers. Ready for your
-            review. Always current.
+          <p className="text-lg sm:text-xl text-[#334155] mt-6 max-w-2xl mx-auto leading-relaxed">
+            RegLynx scans live city records for violations, license gaps, and compliance
+            issues — then generates the documents you need to fix them. Built for
+            Philadelphia property managers.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-10">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
             <Link
               href="/signup"
               className="inline-flex items-center gap-2 px-8 py-3.5 rounded-lg bg-[#059669] text-white font-semibold text-base hover:bg-[#047857] transition-colors shadow-lg shadow-emerald-500/20"
@@ -182,10 +171,15 @@ export default function LandingPage() {
               <ArrowRight className="w-4 h-4" />
             </Link>
             <span className="text-sm text-slate-500">
-              No credit card required
+              $49/mo after trial &middot; No credit card required
             </span>
           </div>
         </div>
+      </section>
+
+      {/* Address Search Lead Magnet */}
+      <section className="pb-20 px-4 sm:px-6 lg:px-8">
+        <AddressSearch />
       </section>
 
       {/* Features */}
@@ -196,12 +190,11 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-[#0f172a]">
-              Everything you need for compliance document management
+              Operational compliance, not just documents
             </h2>
             <p className="text-lg text-[#334155] mt-4 max-w-2xl mx-auto">
-              Generate, monitor, and maintain jurisdiction-specific compliance
-              document templates &mdash; designed to support your compliance
-              efforts.
+              Monitor live city data, track violations, generate required documents,
+              and stay audit-ready across your portfolio.
             </p>
           </div>
 
@@ -226,7 +219,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Why RegLynx? â NEW SECTION */}
+      {/* Why RegLynx */}
       <WhyRegLynx />
 
       {/* Pricing */}
@@ -253,7 +246,7 @@ export default function LandingPage() {
               >
                 {plan.popular && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-emerald-600 text-white text-xs font-medium rounded-full">
-                    Most Popular
+                    Recommended
                   </div>
                 )}
 
@@ -296,6 +289,11 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+
+          <p className="text-center text-sm text-slate-500 mt-8">
+            Enterprise plans available for 25+ properties.{' '}
+            <a href="mailto:hello@reglynx.com" className="text-emerald-600 hover:underline">Contact us</a>
+          </p>
         </div>
       </section>
 
@@ -317,10 +315,10 @@ export default function LandingPage() {
       <section className="py-24 bg-[#0f172a]">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold text-white">
-            Ready to streamline your compliance workflow?
+            Stop guessing. Start monitoring.
           </h2>
           <p className="text-lg text-slate-300 mt-4">
-            Generate your first compliance document template in under a minute.
+            See your property&apos;s compliance status in minutes, not weeks.
           </p>
           <Link
             href="/signup"
@@ -357,82 +355,27 @@ export default function LandingPage() {
 
             <div className="flex flex-col sm:flex-row gap-8">
               <div>
-                <h4 className="text-sm font-medium text-slate-300 mb-3">
-                  Product
-                </h4>
+                <h4 className="text-sm font-medium text-slate-300 mb-3">Product</h4>
                 <ul className="space-y-2">
-                  <li>
-                    <a
-                      href="#features"
-                      className="text-sm text-slate-400 hover:text-white"
-                    >
-                      Features
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="#why-reglynx"
-                      className="text-sm text-slate-400 hover:text-white"
-                    >
-                      Why RegLynx?
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="#pricing"
-                      className="text-sm text-slate-400 hover:text-white"
-                    >
-                      Pricing
-                    </a>
-                  </li>
+                  <li><a href="#features" className="text-sm text-slate-400 hover:text-white">Features</a></li>
+                  <li><a href="#why-reglynx" className="text-sm text-slate-400 hover:text-white">Why RegLynx?</a></li>
+                  <li><a href="#pricing" className="text-sm text-slate-400 hover:text-white">Pricing</a></li>
                 </ul>
               </div>
 
               <div>
-                <h4 className="text-sm font-medium text-slate-300 mb-3">
-                  Legal
-                </h4>
+                <h4 className="text-sm font-medium text-slate-300 mb-3">Legal</h4>
                 <ul className="space-y-2">
-                  <li>
-                    <a
-                      href="/privacy"
-                      className="text-sm text-slate-400 hover:text-white"
-                    >
-                      Privacy Policy
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="/terms"
-                      className="text-sm text-slate-400 hover:text-white"
-                    >
-                      Terms of Service
-                    </a>
-                  </li>
+                  <li><Link href="/privacy" className="text-sm text-slate-400 hover:text-white">Privacy Policy</Link></li>
+                  <li><Link href="/terms" className="text-sm text-slate-400 hover:text-white">Terms of Service</Link></li>
                 </ul>
               </div>
 
               <div>
-                <h4 className="text-sm font-medium text-slate-300 mb-3">
-                  Contact
-                </h4>
+                <h4 className="text-sm font-medium text-slate-300 mb-3">Contact</h4>
                 <ul className="space-y-2">
-                  <li>
-                    <a
-                      href="mailto:hello@reglynx.com"
-                      className="text-sm text-slate-400 hover:text-white"
-                    >
-                      hello@reglynx.com
-                    </a>
-                  </li>
-                  <li>
-                    <a
-                      href="mailto:support@reglynx.com"
-                      className="text-sm text-slate-400 hover:text-white"
-                    >
-                      support@reglynx.com
-                    </a>
-                  </li>
+                  <li><a href="mailto:hello@reglynx.com" className="text-sm text-slate-400 hover:text-white">hello@reglynx.com</a></li>
+                  <li><a href="mailto:support@reglynx.com" className="text-sm text-slate-400 hover:text-white">support@reglynx.com</a></li>
                 </ul>
               </div>
             </div>
