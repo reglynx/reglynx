@@ -157,7 +157,7 @@ export async function evaluateCompliance(
     .from('properties')
     .select('*')
     .eq('id', propertyId)
-    .single();
+    .maybeSingle();
 
   if (propError || !property) {
     throw new Error(`Property ${propertyId} not found: ${propError?.message}`);

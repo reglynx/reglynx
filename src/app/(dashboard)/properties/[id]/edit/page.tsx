@@ -44,7 +44,7 @@ export default function EditPropertyPage() {
         .from('organizations')
         .select('id')
         .eq('owner_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (!org) { router.push('/onboarding'); return; }
 
@@ -53,7 +53,7 @@ export default function EditPropertyPage() {
         .select('*')
         .eq('id', propertyId)
         .eq('org_id', org.id)
-        .single();
+        .maybeSingle();
 
       if (!data) { router.push('/properties'); return; }
       setProperty(data as Property);

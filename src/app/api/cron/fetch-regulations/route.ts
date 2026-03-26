@@ -200,7 +200,7 @@ async function distributeAlertToOrgs(
       .from('regulatory_alerts')
       .select('title, description, jurisdiction')
       .eq('id', alertId)
-      .single();
+      .maybeSingle();
 
     if (alertData) {
       const dashboardUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.reglynx.com'}/alerts`;
@@ -209,7 +209,7 @@ async function distributeAlertToOrgs(
           .from('organizations')
           .select('owner_id, name')
           .eq('id', orgId)
-          .single();
+          .maybeSingle();
 
         if (!org) continue;
         const typedOrg = org as Pick<Organization, 'owner_id' | 'name'>;
