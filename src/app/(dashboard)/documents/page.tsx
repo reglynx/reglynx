@@ -16,25 +16,32 @@ export default async function DocumentsPage() {
 
   if (!user) redirect('/login');
 
-  const { data: org, error: orgError } = await supabase
-    .from('organizations')
-    .select('*')
-    .eq('owner_id', user.id)
-    .maybeSingle<Organization>();
-
-  if (orgError) {
-    console.error('Org fetch error:', orgError);
+  let org: Organization | null = null;
+  try {
+    const { data, error: orgError } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('owner_id', user.id)
+      .maybeSingle<Organization>();
+    if (orgError) console.error('Org fetch error:', orgError);
+    org = data;
+  } catch (e) {
+    console.error('Failed to fetch organization:', e);
   }
 
   if (!org) redirect('/onboarding');
 
-  const { data: documents } = await supabase
-    .from('documents')
-    .select('*')
-    .eq('org_id', org.id)
-    .order('created_at', { ascending: false });
-
-  const documentList: Document[] = documents ?? [];
+  let documentList: Document[] = [];
+  try {
+    const { data: documents } = await supabase
+      .from('documents')
+      .select('*')
+      .eq('org_id', org.id)
+      .order('created_at', { ascending: false });
+    documentList = (documents ?? []) as Document[];
+  } catch (e) {
+    console.error('Failed to fetch documents:', e);
+  }
 
   return (
     <div className="space-y-6">

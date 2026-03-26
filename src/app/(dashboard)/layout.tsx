@@ -21,12 +21,19 @@ export default async function DashboardLayout({
     redirect('/login');
   }
 
-  // Fetch the user's organization
-  const { data: org } = await supabase
-    .from('organizations')
-    .select('*')
-    .eq('owner_id', user.id)
-    .maybeSingle<Organization>();
+  // Fetch the user's organization — wrapped in try/catch so missing tables
+  // don't crash the entire dashboard shell
+  let org: Organization | null = null;
+  try {
+    const { data } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('owner_id', user.id)
+      .maybeSingle<Organization>();
+    org = data;
+  } catch (e) {
+    console.error('Failed to fetch organization (table may be missing):', e);
+  }
 
   if (!org) {
     redirect('/onboarding');

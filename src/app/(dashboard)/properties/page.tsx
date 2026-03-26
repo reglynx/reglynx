@@ -22,39 +22,45 @@ export default async function PropertiesPage({
 
   if (!user) redirect('/login');
 
-  const { data: org, error: orgError } = await supabase
-    .from('organizations')
-    .select('*')
-    .eq('owner_id', user.id)
-    .maybeSingle<Organization>();
-
-  if (orgError) {
-    console.error('Org fetch error:', orgError);
+  let org: Organization | null = null;
+  try {
+    const { data, error: orgError } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('owner_id', user.id)
+      .maybeSingle<Organization>();
+    if (orgError) console.error('Org fetch error:', orgError);
+    org = data;
+  } catch (e) {
+    console.error('Failed to fetch organization:', e);
   }
 
   if (!org) redirect('/onboarding');
 
-  // Fetch active properties (not archived)
-  const activeQuery = supabase
-    .from('properties')
-    .select('*')
-    .eq('org_id', org.id)
-    .is('archived_at', null)
-    .order('created_at', { ascending: false });
+  let activeList: Property[] = [];
+  let archivedList: Property[] = [];
 
-  // Fetch archived properties
-  const archivedQuery = supabase
-    .from('properties')
-    .select('*')
-    .eq('org_id', org.id)
-    .not('archived_at', 'is', null)
-    .order('archived_at', { ascending: false });
+  try {
+    const [activeRes, archivedRes] = await Promise.all([
+      supabase
+        .from('properties')
+        .select('*')
+        .eq('org_id', org.id)
+        .is('archived_at', null)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('properties')
+        .select('*')
+        .eq('org_id', org.id)
+        .not('archived_at', 'is', null)
+        .order('archived_at', { ascending: false }),
+    ]);
+    activeList = (activeRes.data ?? []) as Property[];
+    archivedList = (archivedRes.data ?? []) as Property[];
+  } catch (e) {
+    console.error('Failed to fetch properties:', e);
+  }
 
-  const { data: activeProps } = await activeQuery;
-  const { data: archivedProps } = await archivedQuery;
-
-  const activeList: Property[] = activeProps ?? [];
-  const archivedList: Property[] = archivedProps ?? [];
   const propertyList = showArchived ? archivedList : activeList;
 
   return (

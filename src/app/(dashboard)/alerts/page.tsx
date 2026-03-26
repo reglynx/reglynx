@@ -13,21 +13,31 @@ export default async function AlertsPage() {
 
   if (!user) redirect('/login');
 
-  const { data: org } = await supabase
-    .from('organizations')
-    .select('*')
-    .eq('owner_id', user.id)
-    .maybeSingle<Organization>();
+  let org: Organization | null = null;
+  try {
+    const { data } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('owner_id', user.id)
+      .maybeSingle<Organization>();
+    org = data;
+  } catch (e) {
+    console.error('Failed to fetch organization:', e);
+  }
 
   if (!org) redirect('/onboarding');
 
-  const { data: alertsData } = await supabase
-    .from('org_alerts')
-    .select('*, alert:regulatory_alerts(*)')
-    .eq('org_id', org.id)
-    .order('created_at', { ascending: false });
-
-  const alerts: (OrgAlert & { alert: RegulatoryAlert })[] = alertsData ?? [];
+  let alerts: (OrgAlert & { alert: RegulatoryAlert })[] = [];
+  try {
+    const { data: alertsData } = await supabase
+      .from('org_alerts')
+      .select('*, alert:regulatory_alerts(*)')
+      .eq('org_id', org.id)
+      .order('created_at', { ascending: false });
+    alerts = (alertsData ?? []) as (OrgAlert & { alert: RegulatoryAlert })[];
+  } catch (e) {
+    console.error('Failed to fetch alerts:', e);
+  }
 
   return (
     <div className="space-y-6">

@@ -26,22 +26,34 @@ export default async function BillingPage({
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: org } = await supabase
-    .from('organizations')
-    .select('*')
-    .eq('owner_id', user.id)
-    .maybeSingle<Organization>();
+  let org: Organization | null = null;
+  try {
+    const { data } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('owner_id', user.id)
+      .maybeSingle<Organization>();
+    org = data;
+  } catch (e) {
+    console.error('Failed to fetch organization:', e);
+  }
 
   if (!org) redirect('/onboarding');
 
-  const { data: propertiesData, count: propCount } = await supabase
-    .from('properties')
-    .select('id, city, state', { count: 'exact' })
-    .eq('org_id', org.id);
-
-  const hasPhillyProperties = (propertiesData ?? []).some((p) =>
-    isJurisdictionSupported(p.city ?? '', p.state ?? ''),
-  );
+  let propCount = 0;
+  let hasPhillyProperties = false;
+  try {
+    const { data: propertiesData, count } = await supabase
+      .from('properties')
+      .select('id, city, state', { count: 'exact' })
+      .eq('org_id', org.id);
+    propCount = count ?? 0;
+    hasPhillyProperties = (propertiesData ?? []).some((p) =>
+      isJurisdictionSupported(p.city ?? '', p.state ?? ''),
+    );
+  } catch (e) {
+    console.error('Failed to fetch properties:', e);
+  }
 
   const planKey = org.subscription_plan ?? 'starter';
   const plan = SUBSCRIPTION_PLANS[planKey as keyof typeof SUBSCRIPTION_PLANS] ?? SUBSCRIPTION_PLANS.starter;
@@ -109,7 +121,7 @@ export default async function BillingPage({
                 Properties
               </div>
               <p className="text-2xl font-bold tabular-nums text-slate-800">
-                {propCount ?? 0}
+                {propCount}
                 <span className="text-sm font-normal text-muted-foreground">/{propertyLimit}</span>
               </p>
               {!isActive && (

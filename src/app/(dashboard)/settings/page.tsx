@@ -41,14 +41,17 @@ export default async function SettingsPage() {
 
   if (!user) redirect('/login');
 
-  const { data: org, error: orgError } = await supabase
-    .from('organizations')
-    .select('*')
-    .eq('owner_id', user.id)
-    .maybeSingle<Organization>();
-
-  if (orgError) {
-    console.error('Org fetch error:', orgError);
+  let org: Organization | null = null;
+  try {
+    const { data, error: orgError } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('owner_id', user.id)
+      .maybeSingle<Organization>();
+    if (orgError) console.error('Org fetch error:', orgError);
+    org = data;
+  } catch (e) {
+    console.error('Failed to fetch organization:', e);
   }
 
   if (!org) redirect('/onboarding');
@@ -108,7 +111,7 @@ export default async function SettingsPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-muted-foreground">Account Email</p>
-              <p className="text-sm">{user.email}</p>
+              <p className="text-sm">{user.email ?? 'Not set'}</p>
             </div>
           </div>
         </CardContent>

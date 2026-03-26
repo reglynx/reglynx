@@ -22,36 +22,49 @@ export default async function ReportsPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: org } = await supabase
-    .from('organizations')
-    .select('*')
-    .eq('owner_id', user.id)
-    .maybeSingle<Organization>();
+  let org: Organization | null = null;
+  try {
+    const { data } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('owner_id', user.id)
+      .maybeSingle<Organization>();
+    org = data;
+  } catch (e) {
+    console.error('Failed to fetch organization:', e);
+  }
 
   if (!org) redirect('/onboarding');
 
-  const { data: propertiesData } = await supabase
-    .from('properties')
-    .select('*')
-    .eq('org_id', org.id)
-    .order('created_at', { ascending: false });
-
-  const properties: Property[] = propertiesData ?? [];
+  let properties: Property[] = [];
+  try {
+    const { data: propertiesData } = await supabase
+      .from('properties')
+      .select('*')
+      .eq('org_id', org.id)
+      .order('created_at', { ascending: false });
+    properties = (propertiesData ?? []) as Property[];
+  } catch (e) {
+    console.error('Failed to fetch properties:', e);
+  }
 
   // Fetch latest snapshot for each property
   const snapshotMap = new Map<string, StatusSnapshot>();
   if (properties.length > 0) {
-    const { data: snapshots } = await supabase
-      .from('status_snapshots')
-      .select('property_id, overall_status, computed_at')
-      .in('property_id', properties.map((p) => p.id))
-      .order('computed_at', { ascending: false });
+    try {
+      const { data: snapshots } = await supabase
+        .from('status_snapshots')
+        .select('property_id, overall_status, computed_at')
+        .in('property_id', properties.map((p) => p.id))
+        .order('computed_at', { ascending: false });
 
-    // Keep only the latest per property
-    for (const snap of snapshots ?? []) {
-      if (!snapshotMap.has(snap.property_id)) {
-        snapshotMap.set(snap.property_id, snap);
+      for (const snap of (snapshots ?? []) as (StatusSnapshot & { property_id: string })[]) {
+        if (!snapshotMap.has(snap.property_id)) {
+          snapshotMap.set(snap.property_id, snap);
+        }
       }
+    } catch (e) {
+      console.error('Failed to fetch status_snapshots:', e);
     }
   }
 
