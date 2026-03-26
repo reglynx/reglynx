@@ -69,33 +69,22 @@ const plans = [
       'Daily compliance evaluation',
       '20 AI document drafts/month',
       'Email alerts for critical issues',
-      'Compliance reports',
+      'Compliance reports with source data',
       'Priority pilot support',
-    ],
-  },
-  {
-    name: 'Starter',
-    price: 147,
-    description: 'Document generation for property managers in any state.',
-    features: [
-      'Up to 5 properties',
-      '10 document drafts/month',
-      'Federal + 1 state jurisdiction',
-      'Email alerts',
-      'PDF export',
     ],
   },
   {
     name: 'Professional',
     price: 297,
-    description: 'Full coverage for growing portfolios.',
+    description: 'For operators managing 5+ properties or multiple jurisdictions.',
     features: [
       'Up to 25 properties',
       'Unlimited document drafts',
-      'All jurisdictions',
+      'All jurisdictions (federal + state + local)',
       'Priority alerts',
-      'Team access (up to 5)',
-      'PDF export',
+      'Team access (up to 5 users)',
+      'PDF export & data export',
+      'Dedicated onboarding call',
     ],
   },
 ];
@@ -234,7 +223,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
             {plans.map((plan) => (
               <div
                 key={plan.name}
@@ -291,23 +280,32 @@ export default function LandingPage() {
           </div>
 
           <p className="text-center text-sm text-slate-500 mt-8">
-            Enterprise plans available for 25+ properties.{' '}
+            Not in Philadelphia? Our Starter plan ($147/mo) covers document generation for any U.S. state.{' '}
+            Enterprise plans for 25+ properties available.{' '}
             <a href="mailto:hello@reglynx.com" className="text-emerald-600 hover:underline">Contact us</a>
           </p>
         </div>
       </section>
 
-      {/* Social Proof */}
+      {/* Credibility */}
       <section className="py-16 bg-[#f8fafc] border-y border-slate-200">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-lg text-[#334155] italic leading-relaxed">
-            &ldquo;Built by a property management professional with 10+ years of
-            compliance experience managing Philadelphia multifamily
-            properties.&rdquo;
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-4">
+            Built for the industry, by the industry
           </p>
-          <p className="mt-4 text-sm font-medium text-[#0f172a]">
-            RCCHM Consulting Group
+          <p className="text-lg text-[#334155] leading-relaxed">
+            RegLynx was built by <span className="font-semibold text-[#0f172a]">RCCHM Consulting Group</span> — a
+            Philadelphia-based property management consultancy with 10+ years of hands-on
+            experience managing multifamily rental compliance. Every feature was designed
+            around the real workflows of property managers, not hypothetical use cases.
           </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-sm text-slate-500">
+            <span>Philadelphia, PA</span>
+            <span className="hidden sm:inline text-slate-300">|</span>
+            <span>10+ years in property management</span>
+            <span className="hidden sm:inline text-slate-300">|</span>
+            <span>Multifamily rental compliance</span>
+          </div>
         </div>
       </section>
 

@@ -315,7 +315,7 @@ export default function WhyRegLynx() {
               See Pricing →
             </Button>
           </div>
-          <p className="text-sm text-slate-500">No credit card required · Cancel anytime · Plans from $147/mo</p>
+          <p className="text-sm text-slate-500">No credit card required · Cancel anytime · Philadelphia Pilot from $49/mo</p>
         </div>
       </section>
 
