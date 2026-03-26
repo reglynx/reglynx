@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { fetchAllCityData } from '@/lib/data-sources/philadelphia-open-data';
+import { fetchAllCityData } from '@/lib/data-sources/philadelphia-api';
 import type { Organization, Property } from '@/lib/types';
 
 export async function GET(

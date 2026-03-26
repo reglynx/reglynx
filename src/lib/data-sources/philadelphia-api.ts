@@ -49,7 +49,7 @@ export async function fetchLIViolations(address: string): Promise<LIViolation[]>
   const safe = sanitizeAddress(address);
   if (!safe) return [];
 
-  const sql = `SELECT * FROM li_violations WHERE address_street_name ILIKE '%${safe}%' ORDER BY violationdate DESC LIMIT 50`;
+  const sql = `SELECT * FROM li_violations WHERE address_street_name ILIKE '%${safe}%' ORDER BY violationdate DESC LIMIT 30`;
   const rows = await cartoQuery(sql);
   return rows as unknown as LIViolation[];
 }

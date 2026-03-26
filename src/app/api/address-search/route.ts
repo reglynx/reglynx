@@ -3,7 +3,7 @@ import {
   sanitizeAddress,
   fetchLIViolations,
   fetchRentalLicenses,
-} from '@/lib/data-sources/philadelphia-open-data';
+} from '@/lib/data-sources/philadelphia-api';
 
 /**
  * Public endpoint — no auth required.
