@@ -40,7 +40,6 @@ export async function GET(
       return NextResponse.json({ error: 'Property not found' }, { status: 404 });
     }
 
-    // Only Philadelphia properties have city data
     if (
       property.city?.toLowerCase() !== 'philadelphia' ||
       property.state !== 'PA'
@@ -51,15 +50,20 @@ export async function GET(
       );
     }
 
-    const address = property.address_line1 ?? '';
-    if (!address) {
-      return NextResponse.json(
-        { error: 'Property has no address' },
-        { status: 400 },
-      );
+    // Build full address for resolver
+    const fullAddress = [
+      property.address_line1,
+      property.city,
+      property.state,
+      property.zip,
+    ].filter(Boolean).join(', ');
+
+    if (!fullAddress) {
+      return NextResponse.json({ error: 'Property has no address' }, { status: 400 });
     }
 
-    const cityData = await fetchAllCityData(address);
+    // Use the OPA-keyed pipeline
+    const cityData = await fetchAllCityData(fullAddress);
 
     return NextResponse.json(cityData);
   } catch (error) {
