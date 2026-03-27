@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Logo } from '@/components/shared/Logo';
 import { FOOTER_LEGAL_LINE } from '@/lib/constants';
 import WhyRegLynx from '@/components/landing/WhyRegLynx';
+import { AddressSearch } from '@/components/landing/AddressSearch';
 import {
   FileText,
   Bell,
@@ -185,6 +186,8 @@ export default function LandingPage() {
               No credit card required
             </span>
           </div>
+
+          <AddressSearch />
         </div>
       </section>
 

@@ -25,6 +25,7 @@ import { PropertyNotesEditor } from '@/components/dashboard/PropertyNotesEditor'
 import { PROPERTY_TYPES, DOCUMENT_TYPES, COVERAGE_MESSAGES } from '@/lib/constants';
 import { getCoverage } from '@/lib/jurisdiction/coverage-registry';
 import { ComplianceCheckButton } from '@/components/compliance/ComplianceCheckButton';
+import { CityRecords } from '@/components/dashboard/CityRecords';
 import type { Organization, Property, Document } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
@@ -339,6 +340,11 @@ export default async function PropertyDetailPage({
           property.city?.toLowerCase() === 'philadelphia' && property.state === 'PA'
         }
       />
+
+      {/* ---- City Records (Philadelphia only) ---- */}
+      {property.city?.toLowerCase() === 'philadelphia' && property.state === 'PA' && (
+        <CityRecords propertyId={property.id} />
+      )}
 
       {/* ---- Documents list ---- */}
       <section className="space-y-4">
