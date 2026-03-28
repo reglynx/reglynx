@@ -79,6 +79,11 @@ export async function GET(request: Request) {
         zoning: data.assessment.zoning,
       } : null,
       evidence: data.evidence,
+      sources: data.sources,
+      // Raw issue data for scan result screen
+      violations: data.violations.slice(0, 10),
+      permits: data.permits.slice(0, 5),
+      rentalLicenses: data.rentalLicenses.slice(0, 3),
     });
   } catch (error) {
     console.error('Address search error:', error);

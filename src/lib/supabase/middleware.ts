@@ -65,6 +65,8 @@ export async function updateSession(request: NextRequest) {
     '/privacy',
     '/onboarding',
     '/early-access',
+    '/scan',
+    '/property',
   ];
 
   // API routes handle their own auth — middleware only needs to refresh the
