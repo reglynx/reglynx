@@ -3,18 +3,18 @@ import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'RegLynx — Compliance Document Templates for Property Managers',
+  title: 'RegLynx — Property Compliance Monitoring for Philadelphia',
   description:
-    'RegLynx generates jurisdiction-specific compliance document templates for property management companies. Monitor regulatory changes. Always current. Ready for your review.',
+    'RegLynx scans live city records for violations, license gaps, and compliance issues — then shows you what to fix. Built for Philadelphia property managers.',
   keywords: [
-    'compliance',
-    'property management',
-    'fair housing',
-    'regulatory',
-    'document templates',
-    'OSHA',
+    'Philadelphia property compliance',
+    'L&I violations',
+    'rental license check',
+    'property management compliance',
+    'Philadelphia violations',
+    'rental property compliance',
     'lead paint disclosure',
-    'ADA',
+    'fair housing policy',
   ],
 };
 
