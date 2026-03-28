@@ -1,393 +1,125 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Logo } from '@/components/shared/Logo';
 import { FOOTER_LEGAL_LINE } from '@/lib/constants';
-import WhyRegLynx from '@/components/landing/WhyRegLynx';
-import { AddressSearch } from '@/components/landing/AddressSearch';
-import {
-  FileText,
-  Bell,
-  MapPin,
-  ClipboardList,
-  Users,
-  Download,
-  Shield,
-  ArrowRight,
-  Check,
-  AlertTriangle,
-  ShieldCheck,
-} from 'lucide-react';
-
-const features = [
-  {
-    icon: ShieldCheck,
-    title: 'Live Compliance Monitoring',
-    description:
-      'Pulls L&I violations, rental license status, and permit data directly from Philadelphia Open Data. Know your risk before the city does.',
-  },
-  {
-    icon: FileText,
-    title: 'AI Document Generation',
-    description:
-      'Generate Fair Housing policies, lead disclosures, OSHA plans, and more — drafted from verified regulatory citations, ready for counsel review.',
-  },
-  {
-    icon: Bell,
-    title: 'Regulatory Alerts',
-    description:
-      'Get notified when regulations change that affect your properties. Never miss a compliance deadline or new requirement.',
-  },
-  {
-    icon: AlertTriangle,
-    title: 'Fine Exposure Tracking',
-    description:
-      'See your estimated fine exposure across all properties. Prioritize which violations to address first based on financial risk.',
-  },
-  {
-    icon: ClipboardList,
-    title: 'Compliance Audit Trail',
-    description:
-      'Every document, check, and action is logged. Demonstrate due diligence with a complete compliance history.',
-  },
-  {
-    icon: Download,
-    title: 'Reports & Export',
-    description:
-      'Generate compliance reports per property. Export documents as PDF. Share with investors, auditors, or counsel.',
-  },
-];
-
-const plans = [
-  {
-    name: 'Philadelphia Pilot',
-    price: 49,
-    popular: true,
-    description: 'Live compliance monitoring for Philadelphia rental properties.',
-    features: [
-      'Up to 5 properties',
-      'Live L&I violation monitoring',
-      'Rental license tracking',
-      'Daily compliance evaluation',
-      '20 AI document drafts/month',
-      'Email alerts for critical issues',
-      'Compliance reports with source data',
-      'Priority pilot support',
-    ],
-  },
-  {
-    name: 'Professional',
-    price: 297,
-    description: 'For operators managing 5+ properties or multiple jurisdictions.',
-    features: [
-      'Up to 25 properties',
-      'Unlimited document drafts',
-      'All jurisdictions (federal + state + local)',
-      'Priority alerts',
-      'Team access (up to 5 users)',
-      'PDF export & data export',
-      'Dedicated onboarding call',
-    ],
-  },
-];
+import { MapPin, Loader2, ArrowRight } from 'lucide-react';
 
 export default function LandingPage() {
+  const router = useRouter();
+  const [address, setAddress] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = address.trim();
+    if (!trimmed || trimmed.length < 3) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/address-search?address=${encodeURIComponent(trimmed)}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || 'Search failed');
+        setLoading(false);
+        return;
+      }
+
+      // Store the scan result and navigate to scan page
+      sessionStorage.setItem('reglynx_scan', JSON.stringify(data));
+      sessionStorage.setItem('reglynx_scan_address', trimmed);
+      router.push('/scan');
+    } catch {
+      setError('Something went wrong. Please try again.');
+      setLoading(false);
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-white">
-      {/* Navigation */}
-      <nav className="border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Logo size="sm" />
-
-            <div className="hidden md:flex items-center gap-8">
-              <a href="#features" className="text-sm text-slate-600 hover:text-slate-900">
-                Features
-              </a>
-              <a href="#why-reglynx" className="text-sm text-slate-600 hover:text-emerald-600 font-medium transition-colors">
-                Why RegLynx?
-              </a>
-              <a href="#pricing" className="text-sm text-slate-600 hover:text-slate-900">
-                Pricing
-              </a>
-              <a href="mailto:hello@reglynx.com" className="text-sm text-slate-600 hover:text-slate-900">
-                Contact
-              </a>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Link
-                href="/login"
-                className="text-sm font-medium text-slate-600 hover:text-slate-900"
-              >
-                Sign In
-              </Link>
-              <Link
-                href="/signup"
-                className="inline-flex items-center px-4 py-2 rounded-lg bg-[#059669] text-white text-sm font-medium hover:bg-[#047857] transition-colors"
-              >
-                Start Free Trial
-              </Link>
-            </div>
-          </div>
+    <div className="min-h-screen bg-white flex flex-col">
+      {/* Nav */}
+      <nav className="border-b border-slate-100 bg-white">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+          <Logo size="sm" />
+          <Link
+            href="/login"
+            className="text-sm text-slate-500 hover:text-slate-900"
+          >
+            Sign in
+          </Link>
         </div>
       </nav>
 
-      {/* Hero */}
-      <section className="pt-16 pb-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium mb-6">
-            <Shield className="w-3.5 h-3.5" />
-            Now live: Philadelphia rental property compliance monitoring
-          </div>
-
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-[#0f172a] leading-tight tracking-tight">
-            Know Your Property&apos;s{' '}
-            <span className="text-emerald-600">Compliance Risk</span>{' '}
-            <span className="text-slate-400">Before the City Does.</span>
+      {/* Hero — above the fold */}
+      <main className="flex-1 flex items-center justify-center px-4 sm:px-6">
+        <div className="max-w-xl w-full py-20 sm:py-28">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-[#0f172a] leading-tight tracking-tight text-center">
+            The city already has a file<br className="hidden sm:block" /> on your property.
           </h1>
 
-          <p className="text-lg sm:text-xl text-[#334155] mt-6 max-w-2xl mx-auto leading-relaxed">
-            RegLynx scans live city records for violations, license gaps, and compliance
-            issues — then generates the documents you need to fix them. Built for
-            Philadelphia property managers.
+          <p className="text-base sm:text-lg text-slate-500 mt-5 text-center leading-relaxed max-w-md mx-auto">
+            See open violations, license status, and permit flags — pulled live from Philadelphia public records.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
-            <Link
-              href="/signup"
-              className="inline-flex items-center gap-2 px-8 py-3.5 rounded-lg bg-[#059669] text-white font-semibold text-base hover:bg-[#047857] transition-colors shadow-lg shadow-emerald-500/20"
+          <form onSubmit={handleSearch} className="mt-10">
+            <label
+              htmlFor="address"
+              className="block text-[10px] font-bold uppercase tracking-[2px] text-slate-400 mb-2 text-center"
             >
-              Start Free 14-Day Trial
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-            <span className="text-sm text-slate-500">
-              $49/mo after trial &middot; No credit card required
-            </span>
-          </div>
-        </div>
-      </section>
+              Check any Philadelphia address
+            </label>
 
-      {/* Address Search Lead Magnet */}
-      <section className="pb-20 px-4 sm:px-6 lg:px-8">
-        <AddressSearch />
-      </section>
-
-      {/* Features */}
-      <section
-        id="features"
-        className="py-24 bg-[#f8fafc] border-y border-slate-200"
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-[#0f172a]">
-              Operational compliance, not just documents
-            </h2>
-            <p className="text-lg text-[#334155] mt-4 max-w-2xl mx-auto">
-              Monitor live city data, track violations, generate required documents,
-              and stay audit-ready across your portfolio.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {features.map((feature) => (
-              <div
-                key={feature.title}
-                className="bg-white rounded-xl p-6 border border-slate-200 hover:border-emerald-200 hover:shadow-md transition-all"
-              >
-                <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center mb-4">
-                  <feature.icon className="w-5 h-5 text-emerald-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-[#0f172a] mb-2">
-                  {feature.title}
-                </h3>
-                <p className="text-sm text-[#334155] leading-relaxed">
-                  {feature.description}
-                </p>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+                <input
+                  id="address"
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="1401 Spruce St, Philadelphia PA"
+                  autoComplete="street-address"
+                  className="w-full rounded-lg border border-slate-300 bg-white pl-10 pr-4 py-3.5 text-sm placeholder:text-slate-400 focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                />
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Why RegLynx */}
-      <WhyRegLynx />
-
-      {/* Pricing */}
-      <section id="pricing" className="py-24 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-[#0f172a]">
-              Simple, transparent pricing
-            </h2>
-            <p className="text-lg text-[#334155] mt-4">
-              Start with a 14-day free trial. No credit card required.
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto">
-            {plans.map((plan) => (
-              <div
-                key={plan.name}
-                className={`rounded-xl border p-8 flex flex-col ${
-                  plan.popular
-                    ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-white relative'
-                    : 'border-slate-200 bg-white'
-                }`}
+              <button
+                type="submit"
+                disabled={loading || address.trim().length < 3}
+                className="inline-flex items-center gap-2 rounded-lg bg-[#0f172a] px-6 py-3.5 text-sm font-medium text-white hover:bg-[#1e293b] disabled:opacity-40 transition-colors shrink-0"
               >
-                {plan.popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-emerald-600 text-white text-xs font-medium rounded-full">
-                    Recommended
-                  </div>
+                {loading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <>
+                    Check this property
+                    <ArrowRight className="size-4" />
+                  </>
                 )}
+              </button>
+            </div>
 
-                <h3 className="text-lg font-semibold text-[#0f172a]">
-                  {plan.name}
-                </h3>
-                <p className="text-sm text-[#334155] mt-1">
-                  {plan.description}
-                </p>
+            {error && (
+              <p className="mt-3 text-sm text-red-600 text-center">{error}</p>
+            )}
+          </form>
 
-                <div className="mt-6 mb-6">
-                  <span className="text-4xl font-bold text-[#0f172a]">
-                    ${plan.price}
-                  </span>
-                  <span className="text-slate-500">/month</span>
-                </div>
-
-                <ul className="space-y-3 flex-1">
-                  {plan.features.map((feature) => (
-                    <li
-                      key={feature}
-                      className="flex items-start gap-2 text-sm text-[#334155]"
-                    >
-                      <Check className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-
-                <Link
-                  href="/signup"
-                  className={`mt-8 inline-flex items-center justify-center px-6 py-3 rounded-lg font-medium text-sm transition-colors ${
-                    plan.popular
-                      ? 'bg-[#059669] text-white hover:bg-[#047857]'
-                      : 'bg-slate-100 text-[#0f172a] hover:bg-slate-200'
-                  }`}
-                >
-                  Start Free Trial
-                </Link>
-              </div>
-            ))}
-          </div>
-
-          <p className="text-center text-sm text-slate-500 mt-8">
-            Not in Philadelphia? Our Starter plan ($147/mo) covers document generation for any U.S. state.{' '}
-            Enterprise plans for 25+ properties available.{' '}
-            <a href="mailto:hello@reglynx.com" className="text-emerald-600 hover:underline">Contact us</a>
+          <p className="text-xs text-slate-400 text-center mt-4">
+            Free. No signup. Results in seconds.
           </p>
         </div>
-      </section>
-
-      {/* Credibility */}
-      <section className="py-16 bg-[#f8fafc] border-y border-slate-200">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-4">
-            Built for the industry, by the industry
-          </p>
-          <p className="text-lg text-[#334155] leading-relaxed">
-            RegLynx was built by <span className="font-semibold text-[#0f172a]">RCCHM Consulting Group</span> — a
-            Philadelphia-based property management consultancy with 10+ years of hands-on
-            experience managing multifamily rental compliance. Every feature was designed
-            around the real workflows of property managers, not hypothetical use cases.
-          </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-sm text-slate-500">
-            <span>Philadelphia, PA</span>
-            <span className="hidden sm:inline text-slate-300">|</span>
-            <span>10+ years in property management</span>
-            <span className="hidden sm:inline text-slate-300">|</span>
-            <span>Multifamily rental compliance</span>
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="py-24 bg-[#0f172a]">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-3xl font-bold text-white">
-            Stop guessing. Start monitoring.
-          </h2>
-          <p className="text-lg text-slate-300 mt-4">
-            See your property&apos;s compliance status in minutes, not weeks.
-          </p>
-          <Link
-            href="/signup"
-            className="inline-flex items-center gap-2 px-8 py-3.5 rounded-lg bg-[#059669] text-white font-semibold text-base hover:bg-[#047857] transition-colors mt-8"
-          >
-            Start Free 14-Day Trial
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-          <p className="text-sm text-slate-400 mt-6">
-            Questions?{' '}
-            <a
-              href="mailto:hello@reglynx.com"
-              className="text-emerald-400 hover:underline"
-            >
-              Email us at hello@reglynx.com
-            </a>
-          </p>
-        </div>
-      </section>
+      </main>
 
       {/* Footer */}
-      <footer className="bg-[#0f172a] border-t border-slate-800 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row items-start justify-between gap-8">
-            <div>
-              <Logo size="sm" />
-              <p className="text-sm text-slate-400 mt-3 max-w-xs">
-                RegLynx &mdash; A product of RCCHM Consulting Group
-              </p>
-              <p className="text-sm text-slate-500 mt-2">
-                1700 Market St. Suite 1005, Philadelphia, PA 19103
-              </p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-8">
-              <div>
-                <h4 className="text-sm font-medium text-slate-300 mb-3">Product</h4>
-                <ul className="space-y-2">
-                  <li><a href="#features" className="text-sm text-slate-400 hover:text-white">Features</a></li>
-                  <li><a href="#why-reglynx" className="text-sm text-slate-400 hover:text-white">Why RegLynx?</a></li>
-                  <li><a href="#pricing" className="text-sm text-slate-400 hover:text-white">Pricing</a></li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="text-sm font-medium text-slate-300 mb-3">Legal</h4>
-                <ul className="space-y-2">
-                  <li><Link href="/privacy" className="text-sm text-slate-400 hover:text-white">Privacy Policy</Link></li>
-                  <li><Link href="/terms" className="text-sm text-slate-400 hover:text-white">Terms of Service</Link></li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="text-sm font-medium text-slate-300 mb-3">Contact</h4>
-                <ul className="space-y-2">
-                  <li><a href="mailto:hello@reglynx.com" className="text-sm text-slate-400 hover:text-white">hello@reglynx.com</a></li>
-                  <li><a href="mailto:support@reglynx.com" className="text-sm text-slate-400 hover:text-white">support@reglynx.com</a></li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-slate-800 mt-10 pt-8">
-            <p className="text-xs text-slate-500 text-center">
-              {FOOTER_LEGAL_LINE}
-            </p>
-            <p className="text-xs text-slate-500 text-center mt-2">
-              &copy; 2026 RegLynx. All rights reserved.
-            </p>
-          </div>
-        </div>
+      <footer className="border-t border-slate-100 py-6 px-4">
+        <p className="text-[10px] text-slate-400 text-center max-w-lg mx-auto">
+          {FOOTER_LEGAL_LINE}
+        </p>
       </footer>
     </div>
   );
