@@ -4,21 +4,13 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Logo } from '@/components/shared/Logo';
-import { FOOTER_LEGAL_LINE, SUBSCRIPTION_PLANS } from '@/lib/constants';
+import { FOOTER_LEGAL_LINE } from '@/lib/constants';
+import { UpgradeSelection } from '@/components/upgrade/UpgradeSelection';
 import {
   AlertTriangle,
   ShieldCheck,
   ExternalLink,
   Plus,
-  MapPin,
-  Building2,
-  Calendar,
-  DollarSign,
-  FileText,
-  Check,
-  Loader2,
-  ArrowRight,
-  Zap,
 } from 'lucide-react';
 
 interface ScanViolation {
@@ -85,9 +77,7 @@ export default function PropertyDetailPage() {
   const router = useRouter();
   const [data, setData] = useState<ScanData | null>(null);
   const [inputAddress, setInputAddress] = useState('');
-  const [showPaywall, setShowPaywall] = useState(false);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [showUpgrade, setShowUpgrade] = useState(false);
 
   useEffect(() => {
     const raw = sessionStorage.getItem('reglynx_scan');
@@ -99,35 +89,6 @@ export default function PropertyDetailPage() {
     setData(JSON.parse(raw));
     setInputAddress(addr ?? '');
   }, [router]);
-
-  async function handleUpgrade() {
-    const priceId = SUBSCRIPTION_PLANS.pilot.priceId;
-    if (!priceId) {
-      setCheckoutError('Billing not yet configured. Contact support@reglynx.com');
-      return;
-    }
-    setCheckoutLoading(true);
-    setCheckoutError(null);
-    try {
-      const res = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceId }),
-      });
-      const result = await res.json();
-      if (!res.ok) {
-        setCheckoutError(result.error ?? 'Checkout failed');
-        return;
-      }
-      if (result.url) {
-        window.location.href = result.url;
-      }
-    } catch {
-      setCheckoutError('Failed to start checkout. Please try again.');
-    } finally {
-      setCheckoutLoading(false);
-    }
-  }
 
   if (!data) return null;
 
@@ -143,7 +104,7 @@ export default function PropertyDetailPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <Logo size="sm" href="/" />
           <button
-            onClick={() => setShowPaywall(true)}
+            onClick={() => setShowUpgrade(true)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f172a] px-4 py-2 text-sm font-medium text-white hover:bg-[#1e293b] transition-colors"
           >
             <Plus className="size-3.5" />
@@ -155,47 +116,10 @@ export default function PropertyDetailPage() {
       <main className="flex-1 px-4 sm:px-6 py-8">
         <div className="max-w-4xl mx-auto space-y-6">
 
-          {/* Screen 5 — Inline Paywall */}
-          {showPaywall && (
-            <div className="rounded-xl border-2 border-slate-900 bg-white p-6 sm:p-8">
-              <h2 className="text-xl font-bold text-[#0f172a]">
-                Monitor more properties — $49/month
-              </h2>
-              <p className="text-sm text-slate-500 mt-2">
-                You checked 1 property for free. Upgrade to monitor up to 5:
-              </p>
-              <ul className="mt-4 space-y-2">
-                {[
-                  'All violations, licenses, and permits per property',
-                  'On-demand refresh from live city data',
-                  'Evidence links to verify every record',
-                ].map((f) => (
-                  <li key={f} className="flex items-center gap-2 text-sm text-slate-700">
-                    <Check className="size-4 text-emerald-500 shrink-0" />
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              {checkoutError && (
-                <p className="mt-4 text-sm text-red-600">{checkoutError}</p>
-              )}
-
-              <button
-                onClick={handleUpgrade}
-                disabled={checkoutLoading}
-                className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-[#0f172a] px-6 py-3.5 text-sm font-semibold text-white hover:bg-[#1e293b] disabled:opacity-50 transition-colors"
-              >
-                {checkoutLoading ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Zap className="size-4" />
-                )}
-                {checkoutLoading ? 'Redirecting to checkout...' : 'Upgrade — $49/month'}
-              </button>
-              <p className="text-xs text-slate-400 text-center mt-3">
-                Cancel anytime. No commitment.
-              </p>
+          {/* Upgrade selection — triggered by "Add another property" */}
+          {showUpgrade && (
+            <div className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8">
+              <UpgradeSelection />
             </div>
           )}
 
