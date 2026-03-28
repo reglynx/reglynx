@@ -99,6 +99,12 @@ export async function POST(request: Request) {
         metadata: { org_id: org.id },
       },
       metadata: { org_id: org.id },
+      consent_collection: { terms_of_service: 'required' },
+      custom_text: {
+        terms_of_service_acceptance: {
+          message: `By subscribing, you agree to our [Terms of Service](${origin}/terms) and [Privacy Policy](${origin}/privacy).`,
+        },
+      },
     });
 
     return NextResponse.json({ url: session.url });
