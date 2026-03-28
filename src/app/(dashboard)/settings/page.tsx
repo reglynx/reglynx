@@ -56,8 +56,11 @@ export default async function SettingsPage() {
 
   if (!org) redirect('/onboarding');
 
-  const planInfo = SUBSCRIPTION_PLANS[org.subscription_plan] || SUBSCRIPTION_PLANS.starter;
-  const statusInfo = STATUS_BADGE_MAP[org.subscription_status] || STATUS_BADGE_MAP.active;
+  const isPaid = !!org.stripe_subscription_id;
+  const planInfo = isPaid
+    ? (SUBSCRIPTION_PLANS[org.subscription_plan] || SUBSCRIPTION_PLANS.pilot)
+    : null;
+  const statusInfo = STATUS_BADGE_MAP[org.subscription_status] || STATUS_BADGE_MAP.trialing;
 
   // Stripe health checks
   const stripeMode = process.env.STRIPE_SECRET_KEY?.startsWith('sk_live_') ? 'Live' : 'Test';
@@ -132,13 +135,19 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-3">
-            <span className="text-lg font-semibold">{planInfo.name}</span>
-            <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+            <span className="text-lg font-semibold">{isPaid && planInfo ? planInfo.name : 'Free'}</span>
+            <Badge variant={statusInfo.variant}>{isPaid ? statusInfo.label : 'Free'}</Badge>
           </div>
-          <p className="text-sm text-muted-foreground">
-            ${planInfo.price}/month
-          </p>
-          {org.trial_ends_at && org.subscription_status === 'trialing' && (
+          {isPaid && planInfo ? (
+            <p className="text-sm text-muted-foreground">
+              ${planInfo.price}/month
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Upgrade to monitor more properties.
+            </p>
+          )}
+          {org.trial_ends_at && org.subscription_status === 'trialing' && isPaid && (
             <p className="text-sm text-muted-foreground">
               Trial ends{' '}
               {new Date(org.trial_ends_at).toLocaleDateString('en-US', {
@@ -149,7 +158,7 @@ export default async function SettingsPage() {
             </p>
           )}
           <Link href="/settings/billing" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
-            Manage Billing
+            {isPaid ? 'Manage Billing' : 'Upgrade'}
             <ExternalLink className="ml-1.5 h-3.5 w-3.5" />
           </Link>
         </CardContent>
