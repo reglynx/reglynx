@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SUBSCRIPTION_PLANS } from '@/lib/constants';
 import { BillingActions } from './BillingActions';
+import { SyncAfterCheckout } from './SyncAfterCheckout';
 import { isJurisdictionSupported } from '@/lib/providers/jurisdiction-config';
 import type { Organization } from '@/lib/types';
 
@@ -78,12 +79,15 @@ export default async function BillingPage({
         Back to Settings
       </Link>
 
-      {/* Checkout success banner */}
+      {/* Checkout success banner + sync fallback */}
       {checkout === 'success' && (
-        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          <CheckCircle2 className="size-4 shrink-0" />
-          Payment received — your plan is being activated. Refresh in a moment if the status hasn&apos;t updated yet.
-        </div>
+        <>
+          <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <CheckCircle2 className="size-4 shrink-0" />
+            Payment received — your plan is being activated.
+          </div>
+          {!isPaid && <SyncAfterCheckout />}
+        </>
       )}
 
       {/* Current plan card */}
