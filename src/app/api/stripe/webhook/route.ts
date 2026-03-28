@@ -46,7 +46,12 @@ export async function POST(request: Request) {
           // Determine plan from price ID
           const priceId = subscription.items.data[0]?.price?.id;
           let plan: string = 'starter';
-          if (priceId === process.env.STRIPE_PRICE_ID_PROFESSIONAL) {
+          if (
+            priceId === process.env.STRIPE_PRICE_ID_PILOT ||
+            priceId === process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_PILOT
+          ) {
+            plan = 'pilot';
+          } else if (priceId === process.env.STRIPE_PRICE_ID_PROFESSIONAL) {
             plan = 'professional';
           } else if (priceId === process.env.STRIPE_PRICE_ID_ENTERPRISE) {
             plan = 'enterprise';
@@ -74,7 +79,12 @@ export async function POST(request: Request) {
         if (orgId) {
           const priceId = subscription.items.data[0]?.price?.id;
           let plan: string = 'starter';
-          if (priceId === process.env.STRIPE_PRICE_ID_PROFESSIONAL) {
+          if (
+            priceId === process.env.STRIPE_PRICE_ID_PILOT ||
+            priceId === process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_PILOT
+          ) {
+            plan = 'pilot';
+          } else if (priceId === process.env.STRIPE_PRICE_ID_PROFESSIONAL) {
             plan = 'professional';
           } else if (priceId === process.env.STRIPE_PRICE_ID_ENTERPRISE) {
             plan = 'enterprise';

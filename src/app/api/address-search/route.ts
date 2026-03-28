@@ -1,22 +1,17 @@
 import { NextResponse } from 'next/server';
-import {
-  sanitizeAddress,
-  fetchLIViolations,
-  fetchRentalLicenses,
-} from '@/lib/data-sources/philadelphia-open-data';
+import { fetchAllCityData } from '@/lib/data-sources/philadelphia-open-data';
 
 /**
  * Public endpoint — no auth required.
  * Returns a teaser of city data for a given address.
- * Used on the landing page hero search.
+ * Now uses the OPA-keyed identity pipeline for accurate results.
  */
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const address = searchParams.get('address') ?? '';
-    const sanitized = sanitizeAddress(address);
+    const address = searchParams.get('address')?.trim() ?? '';
 
-    if (!sanitized || sanitized.length < 3) {
+    if (!address || address.length < 3) {
       return NextResponse.json(
         { error: 'Address is required (at least 3 characters)' },
         { status: 400 },
@@ -28,7 +23,6 @@ export async function GET(request: Request) {
     const isPhiladelphia =
       addressLower.includes('philadelphia') ||
       addressLower.includes('phila') ||
-      // PA zip codes for Philadelphia: 191xx
       /191\d{2}/.test(address);
 
     if (!isPhiladelphia) {
@@ -38,31 +32,53 @@ export async function GET(request: Request) {
       });
     }
 
-    // Fetch limited teaser data — violations and rental license only
-    const [violations, licenses] = await Promise.all([
-      fetchLIViolations(sanitized),
-      fetchRentalLicenses(sanitized),
-    ]);
+    // Run the full OPA-keyed pipeline
+    const data = await fetchAllCityData(address);
 
-    const openViolations = violations.filter(
-      (v) => (v.violationstatus as string)?.toLowerCase() === 'open',
-    );
+    // If identity failed, still return what we can
+    if (!data.identity.resolved) {
+      return NextResponse.json({
+        isPhiladelphia: true,
+        identityResolved: false,
+        matchMethod: data.identity.match_method,
+        violationCount: 0,
+        openViolationCount: 0,
+        missingDocumentCount: 5,
+        missingDocuments: ['Rental License', 'Fair Housing Policy', 'Emergency Action Plan', 'Lead Disclosure', 'Violation Response Plan'],
+        estimatedFineExposure: 0,
+        hasRentalLicense: false,
+        message: 'We could not resolve this address to a specific Philadelphia parcel. Try including the full street address.',
+      });
+    }
 
-    const hasRentalLicense = licenses.length > 0;
+    const hasRentalLicense = data.rentalLicenseStatus !== 'not_found';
     const missingDocs: string[] = [];
     if (!hasRentalLicense) missingDocs.push('Rental License');
-    if (openViolations.length > 0) missingDocs.push('Violation Response Plan');
-    // Common missing docs
+    if (data.openViolationCount > 0) missingDocs.push('Violation Response Plan');
     missingDocs.push('Fair Housing Policy', 'Emergency Action Plan', 'Lead Disclosure');
 
     return NextResponse.json({
       isPhiladelphia: true,
-      violationCount: violations.length,
-      openViolationCount: openViolations.length,
+      identityResolved: true,
+      matchMethod: data.identity.match_method,
+      matchConfidence: data.identity.match_confidence,
+      standardizedAddress: data.identity.standardized_address,
+      alternateAddress: data.identity.alternate_address,
+      opaAccountNum: data.identity.opa_account_num,
+      violationCount: data.violationCount,
+      openViolationCount: data.openViolationCount,
       missingDocumentCount: missingDocs.length,
       missingDocuments: missingDocs,
-      estimatedFineExposure: openViolations.length * 300,
+      estimatedFineExposure: data.estimatedFineExposure,
       hasRentalLicense,
+      rentalLicenseStatus: data.rentalLicenseStatus,
+      assessment: data.assessment ? {
+        owner: data.assessment.owner_1,
+        yearBuilt: data.assessment.year_built,
+        marketValue: data.assessment.market_value,
+        zoning: data.assessment.zoning,
+      } : null,
+      evidence: data.evidence,
     });
   } catch (error) {
     console.error('Address search error:', error);
