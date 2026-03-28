@@ -3,8 +3,8 @@ import { stripe, isStripeConfigured } from '@/lib/stripe';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import type { Organization } from '@/lib/types';
 
-const ALLOWED_PRICE_IDS = new Set(
-  [
+function getAllowedPriceIds(): Set<string> {
+  const ids = [
     process.env.STRIPE_PRICE_ID_PILOT,
     process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_PILOT,
     process.env.STRIPE_PRICE_ID_STARTER,
@@ -13,8 +13,9 @@ const ALLOWED_PRICE_IDS = new Set(
     process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_PROFESSIONAL,
     process.env.STRIPE_PRICE_ID_ENTERPRISE,
     process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_ENTERPRISE,
-  ].filter(Boolean),
-);
+  ];
+  return new Set(ids.filter((id): id is string => !!id));
+}
 
 export async function POST(request: Request) {
   try {
@@ -35,7 +36,9 @@ export async function POST(request: Request) {
     }
 
     // Validate priceId is one of our known price IDs to prevent arbitrary Stripe price use
-    if (ALLOWED_PRICE_IDS.size > 0 && !ALLOWED_PRICE_IDS.has(priceId)) {
+    const allowedPriceIds = getAllowedPriceIds();
+    if (allowedPriceIds.size > 0 && !allowedPriceIds.has(priceId)) {
+      console.error('[Stripe Checkout] Rejected price ID:', priceId, 'Allowed:', [...allowedPriceIds]);
       return NextResponse.json(
         { error: 'Invalid price ID' },
         { status: 400 },
