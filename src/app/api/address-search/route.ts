@@ -3,8 +3,11 @@ import { fetchAllCityData } from '@/lib/data-sources/philadelphia-open-data';
 
 /**
  * Public endpoint — no auth required.
- * Returns a teaser of city data for a given address.
- * Now uses the OPA-keyed identity pipeline for accurate results.
+ * Accepts any address input. Runs the AIS identity pipeline to determine
+ * whether the address is in Philadelphia. No string-matching heuristics.
+ *
+ * AIS (api.phila.gov) is the authoritative source — it only resolves
+ * Philadelphia addresses. If AIS resolves it, it's Philly. If not, it isn't.
  */
 export async function GET(request: Request) {
   try {
@@ -18,39 +21,44 @@ export async function GET(request: Request) {
       );
     }
 
-    // Simple heuristic: check if address looks like Philadelphia
-    const addressLower = address.toLowerCase();
-    const isPhiladelphia =
-      addressLower.includes('philadelphia') ||
-      addressLower.includes('phila') ||
-      /191\d{2}/.test(address);
-
-    if (!isPhiladelphia) {
-      return NextResponse.json({
-        isPhiladelphia: false,
-        message: 'Coming soon to your city. Join our waitlist for early access.',
-      });
-    }
-
-    // Run the full OPA-keyed pipeline
+    // Run the full pipeline — AIS determines if this is Philadelphia.
+    // No string-matching heuristics. AIS only resolves Philly addresses.
     const data = await fetchAllCityData(address);
 
-    // If identity failed, still return what we can
+    // If identity was not resolved, the address is either:
+    // - not in Philadelphia (AIS returned nothing)
+    // - a bad/incomplete address
+    // Either way, we can't return city data.
     if (!data.identity.resolved) {
+      // Check if AIS gave us any signal at all (standardized address means
+      // AIS recognized it as Philadelphia, just couldn't find a parcel)
+      const aisRecognized = !!data.identity.standardized_address;
+
+      if (aisRecognized) {
+        // AIS recognized the address (it's in Philly) but couldn't resolve parcel
+        return NextResponse.json({
+          isPhiladelphia: true,
+          identityResolved: false,
+          matchMethod: data.identity.match_method,
+          standardizedAddress: data.identity.standardized_address,
+          violationCount: 0,
+          openViolationCount: 0,
+          missingDocumentCount: 5,
+          missingDocuments: ['Rental License', 'Fair Housing Policy', 'Emergency Action Plan', 'Lead Disclosure', 'Violation Response Plan'],
+          estimatedFineExposure: 0,
+          hasRentalLicense: false,
+          message: 'Address recognized but parcel could not be resolved. Try the full street number and name.',
+        });
+      }
+
+      // AIS returned nothing — not a Philadelphia address or bad input
       return NextResponse.json({
-        isPhiladelphia: true,
-        identityResolved: false,
-        matchMethod: data.identity.match_method,
-        violationCount: 0,
-        openViolationCount: 0,
-        missingDocumentCount: 5,
-        missingDocuments: ['Rental License', 'Fair Housing Policy', 'Emergency Action Plan', 'Lead Disclosure', 'Violation Response Plan'],
-        estimatedFineExposure: 0,
-        hasRentalLicense: false,
-        message: 'We could not resolve this address to a specific Philadelphia parcel. Try including the full street address.',
+        isPhiladelphia: false,
+        message: 'This address could not be found in Philadelphia records. If this is a Philadelphia address, try including the street number and name.',
       });
     }
 
+    // Identity resolved — this is a confirmed Philadelphia property
     const hasRentalLicense = data.rentalLicenseStatus !== 'not_found';
     const missingDocs: string[] = [];
     if (!hasRentalLicense) missingDocs.push('Rental License');
@@ -80,7 +88,6 @@ export async function GET(request: Request) {
       } : null,
       evidence: data.evidence,
       sources: data.sources,
-      // Raw issue data for scan result screen
       violations: data.violations.slice(0, 10),
       permits: data.permits.slice(0, 5),
       rentalLicenses: data.rentalLicenses.slice(0, 3),
