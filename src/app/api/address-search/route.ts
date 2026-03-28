@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { fetchAllCityData } from '@/lib/data-sources/philadelphia-open-data';
+import { checkRateLimit, getRateLimitKey } from '@/lib/rate-limit';
 
 /**
- * Public endpoint — no auth required.
+ * Public endpoint — no auth required. Rate-limited to 20 requests/min per IP.
  * Accepts any address input. Runs the AIS identity pipeline to determine
  * whether the address is in Philadelphia. No string-matching heuristics.
  *
@@ -12,6 +13,12 @@ import { fetchAllCityData } from '@/lib/data-sources/philadelphia-open-data';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    // Rate limit: 20 requests per minute per IP
+    const rateLimitMsg = checkRateLimit(getRateLimitKey(request), 20, 60_000);
+    if (rateLimitMsg) {
+      return NextResponse.json({ error: rateLimitMsg }, { status: 429 });
+    }
+
     const address = searchParams.get('address')?.trim() ?? '';
 
     if (!address || address.length < 3) {

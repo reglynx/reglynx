@@ -1,14 +1,26 @@
 import type { NextConfig } from 'next';
 import { withSentryConfig } from '@sentry/nextjs';
 
-const nextConfig: NextConfig = {};
+const nextConfig: NextConfig = {
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          { key: 'X-DNS-Prefetch-Control', value: 'on' },
+        ],
+      },
+    ];
+  },
+};
 
 export default withSentryConfig(nextConfig, {
-  // Sentry org/project come from SENTRY_ORG and SENTRY_PROJECT env vars.
-  // Set SENTRY_AUTH_TOKEN in Vercel for source map uploads.
   silent: !process.env.CI,
   widenClientFileUpload: true,
-  reactComponentAnnotation: { enabled: true },
-  // Don't fail the build if Sentry is not configured
+  // reactComponentAnnotation moved to webpack config in newer Sentry
   sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
 });
