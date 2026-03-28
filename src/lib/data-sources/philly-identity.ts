@@ -51,13 +51,21 @@ async function cartoQuery(sql: string): Promise<Record<string, unknown>[]> {
   const url = new URL(CARTO_ENDPOINT);
   url.searchParams.set('q', sql);
 
-  const res = await fetch(url.toString(), {
-    headers: { Accept: 'application/json' },
-    signal: AbortSignal.timeout(15000),
-  });
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (e) {
+    console.error(`[CARTO-identity] fetch error:`, e instanceof Error ? e.message : e);
+    return [];
+  }
 
   if (!res.ok) {
-    console.error(`[CARTO] HTTP ${res.status}: ${res.statusText}`);
+    let body = '';
+    try { body = await res.text(); } catch { /* ignore */ }
+    console.error(`[CARTO-identity] HTTP ${res.status}: ${body.slice(0, 200)}`);
     return [];
   }
 

@@ -37,22 +37,44 @@ function sanitizeForCarto(str: string): string {
     .trim();
 }
 
-async function cartoQuery(sql: string): Promise<Record<string, unknown>[]> {
+/** Result wrapper so callers can distinguish "0 results" from "query failed" */
+interface CartoResult {
+  rows: Record<string, unknown>[];
+  error?: string;
+}
+
+async function cartoQuery(sql: string): Promise<CartoResult> {
   const url = new URL(CARTO_ENDPOINT);
   url.searchParams.set('q', sql);
 
-  const res = await fetch(url.toString(), {
-    headers: { Accept: 'application/json' },
-    signal: AbortSignal.timeout(15000),
-  });
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error(`[CARTO] fetch error: ${msg}`);
+    return { rows: [], error: `Carto fetch failed: ${msg}` };
+  }
 
   if (!res.ok) {
-    console.error(`[CARTO] HTTP ${res.status}`);
-    return [];
+    let body = '';
+    try { body = await res.text(); } catch { /* ignore */ }
+    const msg = `Carto HTTP ${res.status}: ${body.slice(0, 200)}`;
+    console.error(`[CARTO] ${msg}`);
+    return { rows: [], error: msg };
   }
 
   const data = await res.json();
-  return data?.rows ?? [];
+  return { rows: data?.rows ?? [] };
+}
+
+/** Convenience: run cartoQuery and return just the rows (legacy compat) */
+async function cartoRows(sql: string): Promise<Record<string, unknown>[]> {
+  const { rows } = await cartoQuery(sql);
+  return rows;
 }
 
 // ---------------------------------------------------------------------------
@@ -68,12 +90,20 @@ export interface SourceMeta {
   error?: string;
 }
 
-function sourceOk(rows: unknown[], err?: unknown): SourceMeta {
+function sourceOk(rows: unknown[], err?: string | unknown): SourceMeta {
   const now = new Date().toISOString();
   if (err) {
     return { status: 'unavailable', lastChecked: now, recordCount: 0, error: String(err) };
   }
   return { status: 'active', lastChecked: now, recordCount: rows.length };
+}
+
+function cartoSourceMeta(result: { rows: unknown[]; error?: string }): SourceMeta {
+  const now = new Date().toISOString();
+  if (result.error) {
+    return { status: 'degraded', lastChecked: now, recordCount: 0, error: result.error };
+  }
+  return { status: 'active', lastChecked: now, recordCount: result.rows.length };
 }
 
 // ---------------------------------------------------------------------------
@@ -136,49 +166,29 @@ export interface RentalLicense {
 // OPA-keyed queries (correct join fields)
 // ---------------------------------------------------------------------------
 
-async function fetchAssessmentByOPA(opaNum: string): Promise<{ rows: PropertyAssessment[]; error?: unknown }> {
+async function fetchAssessmentByOPA(opaNum: string): Promise<CartoResult> {
   const safe = sanitizeForCarto(opaNum);
-  try {
-    const sql = `SELECT parcel_number, owner_1, category_code_description, building_code_description, year_built, market_value, zoning, number_stories, location FROM opa_properties_public WHERE parcel_number = '${safe}' LIMIT 1`;
-    const rows = await cartoQuery(sql);
-    return { rows: rows as unknown as PropertyAssessment[] };
-  } catch (e) {
-    return { rows: [], error: e };
-  }
+  const sql = `SELECT parcel_number, owner_1, category_code_description, building_code_description, year_built, market_value, zoning, number_stories, location FROM opa_properties_public WHERE parcel_number = '${safe}' LIMIT 1`;
+  return cartoQuery(sql);
 }
 
-async function fetchViolationsByOPA(opaNum: string): Promise<{ rows: LIViolation[]; error?: unknown }> {
+async function fetchViolationsByOPA(opaNum: string): Promise<CartoResult> {
   const safe = sanitizeForCarto(opaNum);
-  try {
-    const sql = `SELECT casenumber, violationdate, violationtype, violationdescription, status, casestatus, caseresolutioncode, caseresolutiondate, aptype, casepriority, prioritydesc, opa_account_num FROM li_violations WHERE opa_account_num = '${safe}' ORDER BY violationdate DESC LIMIT 50`;
-    const rows = await cartoQuery(sql);
-    return { rows: rows as unknown as LIViolation[] };
-  } catch (e) {
-    return { rows: [], error: e };
-  }
+  const sql = `SELECT casenumber, violationdate, violationtype, violationdescription, status, casestatus, caseresolutioncode, caseresolutiondate, aptype, casepriority, prioritydesc, opa_account_num FROM li_violations WHERE opa_account_num = '${safe}' ORDER BY violationdate DESC LIMIT 50`;
+  return cartoQuery(sql);
 }
 
-async function fetchPermitsByOPA(opaNum: string): Promise<{ rows: LIPermit[]; error?: unknown }> {
+async function fetchPermitsByOPA(opaNum: string): Promise<CartoResult> {
   const safe = sanitizeForCarto(opaNum);
-  try {
-    const sql = `SELECT permitnumber, permittype, permit_type_name, typeofwork, descriptionofwork, permitissuedate, status, mostrecentinsp, opa_account_num FROM li_permits WHERE opa_account_num = '${safe}' ORDER BY permitissuedate DESC LIMIT 20`;
-    const rows = await cartoQuery(sql);
-    return { rows: rows as unknown as LIPermit[] };
-  } catch (e) {
-    return { rows: [], error: e };
-  }
+  const sql = `SELECT permitnumber, permittype, permit_type_name, typeofwork, descriptionofwork, permitissuedate, status, mostrecentinsp, opa_account_num FROM li_permits WHERE opa_account_num = '${safe}' ORDER BY permitissuedate DESC LIMIT 20`;
+  return cartoQuery(sql);
 }
 
 // NOTE: li_business_licenses uses `opaaccount`, NOT `opa_account_num`
-async function fetchLicensesByOPA(opaNum: string): Promise<{ rows: RentalLicense[]; error?: unknown }> {
+async function fetchLicensesByOPA(opaNum: string): Promise<CartoResult> {
   const safe = sanitizeForCarto(opaNum);
-  try {
-    const sql = `SELECT licensenum, licensetype, initialissuedate, mostrecentissuedate, inactivedate, licensestatus, legalname, business_name, opaaccount, numberofunits FROM li_business_licenses WHERE opaaccount = '${safe}' AND licensetype = 'Rental' LIMIT 5`;
-    const rows = await cartoQuery(sql);
-    return { rows: rows as unknown as RentalLicense[] };
-  } catch (e) {
-    return { rows: [], error: e };
-  }
+  const sql = `SELECT licensenum, licensetype, initialissuedate, mostrecentissuedate, inactivedate, licensestatus, legalname, business_name, opaaccount, numberofunits FROM li_business_licenses WHERE opaaccount = '${safe}' AND licensetype = 'Rental' LIMIT 5`;
+  return cartoQuery(sql);
 }
 
 // ---------------------------------------------------------------------------
@@ -189,16 +199,14 @@ export async function fetchLIViolations(address: string): Promise<LIViolation[]>
   const safe = sanitizeForCarto(address.toUpperCase());
   if (!safe) return [];
   const sql = `SELECT casenumber, violationdate, violationtype, violationdescription, status, casestatus, caseresolutioncode, caseresolutiondate, aptype, casepriority, prioritydesc, opa_account_num FROM li_violations WHERE address ILIKE '%${safe}%' ORDER BY violationdate DESC LIMIT 50`;
-  const rows = await cartoQuery(sql);
-  return rows as unknown as LIViolation[];
+  return (await cartoRows(sql)) as unknown as LIViolation[];
 }
 
 export async function fetchRentalLicenses(address: string): Promise<RentalLicense[]> {
   const safe = sanitizeForCarto(address.toUpperCase());
   if (!safe) return [];
-  const sql = `SELECT licensenum, licensetype, initialissuedate, mostrecentissuedate, inactivedate, licensestatus, legalname, business_name, opaaccount, numberofunits FROM li_business_licenses WHERE street_address ILIKE '%${safe}%' AND licensetype = 'Rental' LIMIT 5`;
-  const rows = await cartoQuery(sql);
-  return rows as unknown as RentalLicense[];
+  const sql = `SELECT licensenum, licensetype, initialissuedate, mostrecentissuedate, inactivedate, licensestatus, legalname, business_name, opaaccount, numberofunits FROM li_business_licenses WHERE address ILIKE '%${safe}%' AND licensetype = 'Rental' LIMIT 5`;
+  return (await cartoRows(sql)) as unknown as RentalLicense[];
 }
 
 // ---------------------------------------------------------------------------
@@ -271,12 +279,12 @@ export async function fetchAllCityData(address: string): Promise<PhiladelphiaCit
     fetchLicensesByOPA(opa),
   ]);
 
-  const assessment = assessmentRes.rows[0] ?? null;
-  const violations = violationsRes.rows;
-  const permits = permitsRes.rows;
-  const rentalLicenses = licensesRes.rows;
+  const assessment = (assessmentRes.rows[0] as unknown as PropertyAssessment) ?? null;
+  const violations: LIViolation[] = violationsRes.error ? [] : violationsRes.rows as unknown as LIViolation[];
+  const permits: LIPermit[] = permitsRes.error ? [] : permitsRes.rows as unknown as LIPermit[];
+  const rentalLicenses: RentalLicense[] = licensesRes.error ? [] : licensesRes.rows as unknown as RentalLicense[];
 
-  // Open violations
+  // Open violations — use `status` field (confirmed correct Carto column)
   const openViolations = violations.filter(
     (v) => {
       const s = (v.status ?? v.casestatus ?? '').toLowerCase();
@@ -337,10 +345,10 @@ export async function fetchAllCityData(address: string): Promise<PhiladelphiaCit
     rentalLicenseStatus,
     requiredActions,
     sources: {
-      assessment: sourceOk(assessmentRes.rows, assessmentRes.error),
-      violations: sourceOk(violationsRes.rows, violationsRes.error),
-      permits: sourceOk(permitsRes.rows, permitsRes.error),
-      licenses: sourceOk(licensesRes.rows, licensesRes.error),
+      assessment: cartoSourceMeta(assessmentRes),
+      violations: cartoSourceMeta(violationsRes),
+      permits: cartoSourceMeta(permitsRes),
+      licenses: cartoSourceMeta(licensesRes),
     },
     evidence: {
       atlas_link: identity.atlas_link,
